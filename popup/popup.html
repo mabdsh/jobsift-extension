@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>JobSift</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+<div class="app">
+
+  <!-- Header -->
+  <header class="app-header">
+    <div class="app-brand">
+      <svg class="app-logo" viewBox="0 0 22 22" fill="none">
+        <circle cx="11" cy="11" r="10.25" fill="#2563eb"/>
+        <path d="M6 11.5l3 3 7-7" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span class="app-name">JobSift</span>
+      <span class="app-ver">v2.1</span>
+    </div>
+    <div id="statusPill" class="status-pill status-pill--idle">Not on Jobs page</div>
+  </header>
+
+  <div class="body-scroll">
+
+    <!-- About Me -->
+    <div class="seg seg--open" id="seg-about">
+      <button class="seg-hdr" data-seg="seg-about">
+        <span class="seg-left">
+          <span class="seg-dot seg-dot--blue"></span>
+          <span class="seg-title">About me</span>
+          <span class="seg-tag">primary</span>
+        </span>
+        <span class="seg-chev" id="chev-about">▾</span>
+      </button>
+      <div class="seg-body" id="body-about">
+        <div class="field">
+          <label class="lbl" for="desc">Describe your job search</label>
+          <textarea id="desc" class="textarea" rows="5"
+            placeholder="e.g. I'm a senior Laravel developer with 5 years experience seeking remote roles. Must be PHP/Laravel. Min $80K. No blockchain. My stack: PHP, Laravel, Vue.js, MySQL, Docker."></textarea>
+          <div class="autofill-row">
+            <button id="autoFillBtn" class="autofill-btn" disabled>
+              <span id="afIcon">✨</span>
+              <span id="afLabel">Auto-fill from description</span>
+            </button>
+            <div id="afMsg" class="af-msg af-msg--hidden" role="alert" aria-live="polite"></div>
+          </div>
+          <p class="hint">Be specific — mention your must-have technologies, work preferences, and salary expectations</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Background -->
+    <div class="seg" id="seg-bg">
+      <button class="seg-hdr" data-seg="seg-bg">
+        <span class="seg-left">
+          <span class="seg-dot" id="dot-bg"></span>
+          <span class="seg-title">Background</span>
+        </span>
+        <span class="seg-chev" id="chev-bg">▸</span>
+      </button>
+      <div class="seg-body seg-body--closed" id="body-bg">
+        <div class="field">
+          <label class="lbl" for="currentTitle">Current job title</label>
+          <input id="currentTitle" class="inp" type="text" placeholder="e.g. Senior PHP Developer" maxlength="120">
+        </div>
+        <div class="field">
+          <label class="lbl" for="expYears">Total experience</label>
+          <select id="expYears" class="inp inp-sel">
+            <option value="0">Select your level</option>
+            <option value="1">0–1 year (Fresh / Intern)</option>
+            <option value="2">1–2 years (Junior)</option>
+            <option value="4">2–4 years (Mid-level)</option>
+            <option value="6">4–6 years (Mid-Senior)</option>
+            <option value="8">6–8 years (Senior)</option>
+            <option value="12">9–12 years (Staff / Lead)</option>
+            <option value="15">12+ years (Principal / Director)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="lbl">Target job titles</label>
+          <div class="tagbox" id="rolesBox">
+            <div class="taglist" id="rolesTags"></div>
+            <input class="taginp" id="rolesInp" placeholder="Laravel Developer, Backend Engineer…" maxlength="80">
+          </div>
+          <p class="hint">Press Enter — jobs matching these score higher</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Skills — three tiers -->
+    <div class="seg" id="seg-skills">
+      <button class="seg-hdr" data-seg="seg-skills">
+        <span class="seg-left">
+          <span class="seg-dot" id="dot-skills"></span>
+          <span class="seg-title">Skills</span>
+          <span class="seg-tag" id="skills-count"></span>
+        </span>
+        <span class="seg-chev" id="chev-skills">▸</span>
+      </button>
+      <div class="seg-body seg-body--closed" id="body-skills">
+
+        <!-- Tier 1: Critical -->
+        <div class="field">
+          <label class="lbl">
+            ⚡ Critical skills
+            <span class="lbl-sub">must-have · instant red if absent</span>
+          </label>
+          <div class="tagbox tagbox--critical" id="criticalBox">
+            <div class="taglist" id="criticalTags"></div>
+            <input class="taginp" id="criticalInp" placeholder="Laravel, Vue.js… (max 5)" maxlength="80">
+          </div>
+          <p class="hint">If the job doesn't mention these, score is capped — max 4 skills</p>
+        </div>
+
+        <!-- Tier 2: Primary -->
+        <div class="field">
+          <label class="lbl">Primary skills <span class="lbl-sub">expert-level · 35% of score</span></label>
+          <div class="tagbox" id="primaryBox">
+            <div class="taglist" id="primaryTags"></div>
+            <input class="taginp" id="primaryInp" placeholder="PHP, MySQL, Docker, AWS…" maxlength="80">
+          </div>
+          <p class="hint">All skills you'd want the job to mention</p>
+        </div>
+
+        <!-- Tier 3: Secondary -->
+        <div class="field">
+          <label class="lbl">Secondary skills <span class="lbl-sub">nice-to-have · bonus points</span></label>
+          <div class="tagbox" id="secondaryBox">
+            <div class="taglist" id="secondaryTags"></div>
+            <input class="taginp" id="secondaryInp" placeholder="Redis, Elasticsearch, GraphQL…" maxlength="80">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Job Preferences -->
+    <div class="seg" id="seg-prefs">
+      <button class="seg-hdr" data-seg="seg-prefs">
+        <span class="seg-left">
+          <span class="seg-dot" id="dot-prefs"></span>
+          <span class="seg-title">Job preferences</span>
+        </span>
+        <span class="seg-chev" id="chev-prefs">▸</span>
+      </button>
+      <div class="seg-body seg-body--closed" id="body-prefs">
+        <div class="field">
+          <label class="lbl">Work arrangement</label>
+          <div class="toggle-row">
+            <label class="tog"><input type="checkbox" id="wt-remote"><span>Remote</span></label>
+            <label class="tog"><input type="checkbox" id="wt-hybrid"><span>Hybrid</span></label>
+            <label class="tog"><input type="checkbox" id="wt-onsite"><span>On-site</span></label>
+          </div>
+        </div>
+        <div class="field">
+          <label class="lbl">Job type</label>
+          <div class="toggle-row">
+            <label class="tog"><input type="checkbox" id="jt-full"><span>Full-time</span></label>
+            <label class="tog"><input type="checkbox" id="jt-contract"><span>Contract</span></label>
+            <label class="tog"><input type="checkbox" id="jt-part"><span>Part-time</span></label>
+          </div>
+        </div>
+        <div class="field">
+          <label class="lbl" for="minSalary">Minimum salary (USD / year)</label>
+          <div class="salary-row">
+            <span class="salary-sym">$</span>
+            <input id="minSalary" class="inp salary-inp" type="number" placeholder="e.g. 80000" min="0" step="5000">
+          </div>
+          <p class="hint">Jobs not listing salary show as unknown for compensation criterion</p>
+        </div>
+        <div class="field">
+          <label class="lbl" for="careerGoal">Career goal <span class="lbl-sub">optional</span></label>
+          <input id="careerGoal" class="inp" type="text" placeholder="e.g. Lead a backend team at a SaaS company" maxlength="200">
+        </div>
+      </div>
+    </div>
+
+    <!-- Deal-breakers -->
+    <div class="seg" id="seg-filters">
+      <button class="seg-hdr" data-seg="seg-filters">
+        <span class="seg-left">
+          <span class="seg-dot" id="dot-filters"></span>
+          <span class="seg-title">Deal-breakers</span>
+          <span class="seg-tag seg-tag--muted">auto-filter</span>
+        </span>
+        <span class="seg-chev" id="chev-filters">▸</span>
+      </button>
+      <div class="seg-body seg-body--closed" id="body-filters">
+        <div class="field">
+          <label class="lbl">Keywords to avoid</label>
+          <div class="tagbox tagbox--danger" id="dealBox">
+            <div class="taglist" id="dealTags"></div>
+            <input class="taginp" id="dealInp" placeholder="Blockchain, PHP, Gambling…" maxlength="80">
+          </div>
+          <p class="hint">Any job containing these scores 0 immediately</p>
+        </div>
+        <div class="field">
+          <label class="lbl">Industries to avoid</label>
+          <div class="tagbox tagbox--danger" id="avoidBox">
+            <div class="taglist" id="avoidTags"></div>
+            <input class="taginp" id="avoidInp" placeholder="Gaming, Crypto, Adult…" maxlength="80">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI Settings -->
+    <div class="seg" id="seg-settings">
+      <button class="seg-hdr" data-seg="seg-settings">
+        <span class="seg-left">
+          <span class="seg-dot" id="dot-settings"></span>
+          <span class="seg-title">AI Settings</span>
+          </span>
+        <span class="seg-chev" id="chev-settings">▸</span>
+      </button>
+      <div class="seg-body seg-body--closed" id="body-settings">
+        <div class="field">
+          <label class="lbl" for="apiKey">Groq API Key</label>
+          <div class="key-row">
+            <input type="password" id="apiKey" class="inp" placeholder="gsk_…" autocomplete="off" spellcheck="false">
+            <button id="eyeBtn" class="eye-btn" type="button" aria-label="Show/hide key">
+              <svg viewBox="0 0 16 16" fill="none" width="14" height="14">
+                <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z" stroke="currentColor" stroke-width="1.4"/>
+                <circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.4"/>
+              </svg>
+            </button>
+          </div>
+          <p class="hint">Free at <a href="https://console.groq.com" target="_blank" class="link">console.groq.com</a> · Stored locally only · Enables AI deep analysis on each job</p>
+        </div>
+        <div class="key-actions">
+          <button id="saveKeyBtn" class="key-save-btn">Save key</button>
+          <button id="clearKeyBtn" class="key-clear-btn hidden">Remove</button>
+        </div>
+        <div id="keyMsg" class="af-msg af-msg--hidden" role="alert" aria-live="polite"></div>
+      </div>
+    </div>
+
+  </div><!-- /body-scroll -->
+
+  <!-- Save bar with completeness guidance -->
+  <footer class="save-bar">
+    <div class="progress">
+      <div class="progress-track">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+      <span class="progress-lbl" id="progressLbl">Set up your profile to start scoring</span>
+    </div>
+    <!-- Completeness guidance — shows what's missing and its impact -->
+    <div id="completenessGuide" class="completeness-guide hidden"></div>
+    <button id="saveBtn" class="save-btn">Save profile</button>
+    <div id="saveToast" class="save-toast hidden" role="alert" aria-live="polite">
+      ✓ Saved — job scores will refresh on LinkedIn
+    </div>
+  </footer>
+
+</div>
+<script src="popup.js"></script>
+</body>
+</html>
