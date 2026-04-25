@@ -14,7 +14,7 @@ const COMPLETENESS_FIELDS = [
 ];
 
 document.addEventListener('DOMContentLoaded', async () => {
-  setupTabs();
+  setupAccordion();
   setupTagInputs();
   setupAutofill();
 
@@ -30,16 +30,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   );
 });
 
-// ── Tabs ──────────────────────────────────────────────────────────────────────
-function setupTabs() {
-  document.querySelectorAll('.tab-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const tab = btn.dataset.tab;
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('tab-btn--active'));
-      document.querySelectorAll('.tab-pane').forEach(p => p.classList.add('tab-pane--hidden'));
-      btn.classList.add('tab-btn--active');
-      const pane = document.getElementById(`pane-${tab}`);
-      if (pane) pane.classList.remove('tab-pane--hidden');
+// ── Accordion ─────────────────────────────────────────────────────────────────
+function setupAccordion() {
+  document.querySelectorAll('.acc-header').forEach(header => {
+    header.addEventListener('click', () => {
+      header.closest('.acc-section').classList.toggle('open');
     });
   });
 }
@@ -215,7 +210,7 @@ function applyParsed(p) {
   if (p.workTypes?.length)     { ['remote','hybrid','onsite'].forEach(t=>setChk(`wt-${t}`,p.workTypes.includes(t))); }
   if (p.targetRoles?.length)   { tags.roles    = [...p.targetRoles];   renderTags('rolesTags','roles',false); }
   if (p.mustHaveSkills?.length){ tags.critical = [...p.mustHaveSkills.slice(0,MAX_CRITICAL)]; renderTags('criticalTags','critical',false);
-    document.querySelector('[data-tab="skills"]')?.click();
+    document.getElementById('acc-skills')?.classList.add('open');
   }
   if (p.primarySkills?.length)  { tags.primary  = [...p.primarySkills];  renderTags('primaryTags','primary',false); }
   if (p.secondarySkills?.length){ tags.secondary= [...p.secondarySkills]; renderTags('secondaryTags','secondary',false); }
@@ -237,11 +232,8 @@ async function updateStatus() {
     const url = tab?.url || '';
     const on  = url.includes('linkedin.com/jobs') || url.includes('linkedin.com/search/results/jobs');
     pill.textContent = on ? '● Active on Jobs' : 'Open LinkedIn Jobs';
-    if (on) pill.classList.add('status-pill--on');
+    pill.classList.toggle('status-pill--on', on);
   } catch (_) {
-    // Tab query can fail in certain extension contexts (e.g. popups opened
-    // from the extensions management page). Show a neutral state rather than
-    // leaving stale text or throwing an unhandled rejection.
     pill.textContent = 'Open LinkedIn Jobs';
   }
 }
