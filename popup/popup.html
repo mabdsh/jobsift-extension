@@ -20,6 +20,7 @@
         </svg>
       </div>
       <span class="brand-name">JobSift</span>
+      <span id="proBadge" class="pro-badge" style="display:none">PRO</span>
     </div>
     <div id="statusPill" class="status-pill">Open LinkedIn Jobs</div>
   </header>
@@ -241,6 +242,27 @@
     </div>
 
   </div><!-- /scroll-area -->
+
+  <!-- Upgrade section — hidden by default, shown when subscriptions enabled + free tier -->
+  <div id="upgradeSection" class="upgrade-section" style="display:none">
+    <div class="upgrade-banner">
+      <div class="upgrade-info">
+        <div class="upgrade-title">Upgrade to Pro</div>
+        <div class="upgrade-limits">30→300 scores · 3→30 analyses/day</div>
+      </div>
+      <button class="upgrade-cta" id="upgradeBtn">$7/mo →</button>
+    </div>
+    <div class="restore-area">
+      <button class="restore-toggle-btn" id="restoreToggleBtn" type="button">Already subscribed? Restore access</button>
+      <div id="restoreForm" style="display:none">
+        <div class="restore-row">
+          <input type="email" id="restoreEmail" class="inp" placeholder="your@email.com" style="flex:1">
+          <button class="restore-submit" id="restoreBtn" type="button">Restore</button>
+        </div>
+        <div id="restoreMsg" class="msg msg--hidden" role="alert"></div>
+      </div>
+    </div>
+  </div>
 
   <!-- Footer -->
   <footer class="footer">

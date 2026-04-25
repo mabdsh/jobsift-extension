@@ -28,6 +28,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.querySelectorAll('input, select, textarea').forEach(el =>
     el.addEventListener('input', updateFooter)
   );
+
+  // Subscription UI — reads from service worker cache, shows/hides upgrade section
+  setupUpgradeUI();
+  initSubscriptionUI();
 });
 
 // ── Accordion ─────────────────────────────────────────────────────────────────
@@ -300,4 +304,114 @@ function showMsg(id, text, type) {
   el.textContent = text;
   el.className = `msg msg--${type}`;
   setTimeout(() => { el.className = 'msg msg--hidden'; el.textContent = ''; }, 5000);
+}
+
+// ── Subscription UI ───────────────────────────────────────────────────────────
+//
+// Design: popup NEVER calls the backend directly.
+// All network calls go through the service worker via chrome.runtime.sendMessage.
+// This keeps CLIENT_SECRET and API_BASE_URL out of the popup entirely.
+
+// Read cached subscription status written by the service worker
+async function loadSubscriptionStatus() {
+  return new Promise(resolve => {
+    chrome.storage.local.get('jobsift_sub', d => resolve(d.jobsift_sub || null));
+  });
+}
+
+// Show/hide upgrade UI based on subscription status object
+function updateSubscriptionUI(status) {
+  const upgradeSection = document.getElementById('upgradeSection');
+  const proBadge       = document.getElementById('proBadge');
+  if (!upgradeSection || !proBadge) return;
+
+  if (!status || !status.subscriptions_enabled) {
+    // Subscriptions are off — paywall not active, show nothing to users
+    upgradeSection.style.display = 'none';
+    proBadge.style.display       = 'none';
+    return;
+  }
+
+  if (status.tier === 'pro') {
+    // Paid subscriber — show Pro badge, hide upgrade prompt
+    upgradeSection.style.display = 'none';
+    proBadge.style.display       = 'inline-flex';
+    return;
+  }
+
+  // Free user with paywall active — show upgrade section
+  upgradeSection.style.display = 'flex';
+  proBadge.style.display       = 'none';
+}
+
+async function initSubscriptionUI() {
+  // Step 1: Render immediately from cache so popup feels instant
+  const cached = await loadSubscriptionStatus();
+  updateSubscriptionUI(cached);
+
+  // Step 2: ALWAYS fetch fresh status from the backend via service worker.
+  // This is the critical fix — the cache may be stale if the admin toggled
+  // subscriptions on/off since the last hourly refresh. The popup opens for
+  // only a few seconds; a 200-400ms background refresh is imperceptible.
+  chrome.runtime.sendMessage({ type: 'JS_REFRESH_SUB_STATUS' }, (res) => {
+    if (chrome.runtime.lastError) return; // extension context invalidated — ignore
+    if (res?.data) updateSubscriptionUI(res.data);
+  });
+}
+
+function setupUpgradeUI() {
+  const upgradeBtn    = document.getElementById('upgradeBtn');
+  const restoreToggle = document.getElementById('restoreToggleBtn');
+  const restoreForm   = document.getElementById('restoreForm');
+  const restoreBtn    = document.getElementById('restoreBtn');
+  const restoreEmail  = document.getElementById('restoreEmail');
+
+  // Upgrade button — tells the service worker to open the checkout tab.
+  // The service worker knows the backend URL; the popup does not need to.
+  upgradeBtn?.addEventListener('click', () => {
+    chrome.runtime.sendMessage({ type: 'JS_OPEN_UPGRADE' });
+  });
+
+  // Restore access toggle
+  restoreToggle?.addEventListener('click', () => {
+    if (!restoreForm) return;
+    const isVisible = restoreForm.style.display !== 'none';
+    restoreForm.style.display  = isVisible ? 'none' : 'block';
+    if (restoreToggle) {
+      restoreToggle.textContent = isVisible
+        ? 'Already subscribed? Restore access'
+        : 'Hide restore form';
+    }
+  });
+
+  // Restore submit — sends email to service worker which calls the backend
+  restoreBtn?.addEventListener('click', async () => {
+    const email = restoreEmail?.value.trim();
+    if (!email || !email.includes('@')) {
+      showMsg('restoreMsg', 'Enter a valid email address.', 'error');
+      return;
+    }
+
+    if (restoreBtn) { restoreBtn.disabled = true; restoreBtn.textContent = 'Restoring…'; }
+
+    chrome.runtime.sendMessage({ type: 'JS_RESTORE_SUBSCRIPTION', email }, (res) => {
+      if (chrome.runtime.lastError || !res) {
+        showMsg('restoreMsg', 'Service unavailable — try again shortly.', 'error');
+        if (restoreBtn) { restoreBtn.disabled = false; restoreBtn.textContent = 'Restore'; }
+        return;
+      }
+
+      if (res.ok) {
+        showMsg('restoreMsg', '✓ Subscription restored successfully!', 'success');
+        updateSubscriptionUI(res.status);
+        if (restoreForm) restoreForm.style.display = 'none';
+        if (restoreToggle) restoreToggle.textContent = 'Already subscribed? Restore access';
+      } else {
+        const msg = res.message || 'No active subscription found for this email.';
+        showMsg('restoreMsg', msg, 'error');
+      }
+
+      if (restoreBtn) { restoreBtn.disabled = false; restoreBtn.textContent = 'Restore'; }
+    });
+  });
 }
