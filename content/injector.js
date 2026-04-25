@@ -1,5 +1,5 @@
-// JobSift Injector v2.1.0
-// Loading-first badge: shows "..." until AI batch score arrives
+// JobSift Injector v2.2.1
+// Badge injected into the actions-container column (right side, always consistent)
 
 (function () {
   'use strict';
@@ -15,76 +15,100 @@
     badge.className = 'js-badge js-badge--loading';
     badge.setAttribute('role', 'img');
     badge.setAttribute('aria-label', 'JobSift: scoring…');
-    badge.title = 'Scoring…';
 
     const dot  = document.createElement('span'); dot.className = 'js-dot';
     const dots = document.createElement('span'); dots.className = 'js-badge-dots';
     dots.innerHTML = '<span></span><span></span><span></span>';
-
     badge.append(dot, dots);
     return badge;
   }
 
-  // Inject the loading badge — never injects twice at <li> level
-  function injectLoadingBadge(card, jobData) {
+  // ── Find the right-side actions column ────────────────────────────────────
+  // This container sits at the far right of every card regardless of title length.
+  // Injecting here gives us a consistent position on all cards.
+  function findActionsContainer(card, li) {
+    const selectors = [
+      '.job-card-list__actions-container',
+      '[class*="job-card-list__actions"]',
+      '[class*="actions-container"]',
+    ];
+    for (const sel of selectors) {
+      const el = card.querySelector(sel) || li.querySelector(sel);
+      if (el) return el;
+    }
+    return null;
+  }
+
+  // ── Inject loading badge ───────────────────────────────────────────────────
+  function injectLoadingBadge(card) {
     const li = card.closest('li') || card;
     if (li.dataset.jsDone || li.dataset.jsProcessing) return;
     if (li.querySelector('.js-badge')) return;
 
-    li.dataset.jsProcessing = 'true';
+    li.dataset.jsProcessing  = 'true';
     card.dataset.jsProcessing = 'true';
 
-    const badge  = createLoadingBadge();
-    const anchor = findTitleEl(card);
+    const badge   = createLoadingBadge();
+    const actions = findActionsContainer(card, li);
 
-    if (anchor?.parentElement) {
-      const p = anchor.parentElement;
-      p.style.cssText += ';display:flex!important;align-items:center!important;flex-wrap:wrap!important;gap:5px!important;';
-      anchor.insertAdjacentElement('afterend', badge);
+    if (actions) {
+      const slot = document.createElement('div');
+      slot.className = 'js-badge-slot';
+      slot.appendChild(badge);
+      actions.insertBefore(slot, actions.firstChild);
     } else {
-      // Absolute fallback (rare after looksLikeJobCard fix)
-      const wrap = li.querySelector('[class*="job-card-container"]') || li;
-      wrap.style.position = 'relative';
-      badge.style.cssText = 'position:absolute!important;top:8px!important;right:8px!important;z-index:10!important;';
-      wrap.appendChild(badge);
+      // Absolute fallback — rare after looksLikeJobCard fix
+      li.style.position = 'relative';
+      badge.className += ' js-badge--abs';
+      li.appendChild(badge);
     }
 
-    // Mark at <li> level so re-renders don't inject again
     li.dataset.jsDone = 'true';
     delete li.dataset.jsProcessing;
     delete card.dataset.jsProcessing;
   }
 
-  // ── Update badge with AI result ────────────────────────────────────────────
-  // Called once per card when the batch AI response arrives.
-  // result = { score, label, text, verdict, criteria, tips, recommendation, ... }
+  // ── Replace loading badge with scored badge ────────────────────────────────
   function updateBadgeWithResult(li, result, jobData) {
     const old = li.querySelector('.js-badge');
     if (!old) return;
 
-    // Build the final scored badge
+    // Fix #2: result may have score:null when profile is incomplete or AI fails.
+    // Guard every field so we never render "null%", "undefined%", or
+    // `js-badge--undefined` class — all of which silently break the UI.
+    const safeLabel = result.label || 'gray';
+    const hasScore  = result.score !== null && result.score !== undefined;
+    const scoreText = hasScore ? `${result.score}%` : '—';
+    const ariaText  = hasScore
+      ? `JobSift: ${result.score}% match — ${result.text || ''}`
+      : `JobSift: ${result.text || 'Set up your profile to score jobs'}`;
+
     const badge = document.createElement('span');
-    badge.className = `js-badge js-badge--${result.label}`;
+    badge.className = `js-badge js-badge--${safeLabel}`;
     badge.setAttribute('role', 'button');
     badge.setAttribute('tabindex', '0');
-    badge.setAttribute('aria-label', `JobSift: ${result.score}% match — ${result.text}`);
+    badge.setAttribute('aria-label', ariaText);
     badge.title = result.text || '';
 
     const dot     = document.createElement('span'); dot.className = 'js-dot';
     const scoreEl = document.createElement('span'); scoreEl.className = 'js-badge-score';
-    scoreEl.textContent = `${result.score}%`;
+    scoreEl.textContent = scoreText;
     badge.append(dot, scoreEl);
 
+    // Badge is always clickable — opens the panel which explains the score
+    // (or explains why the profile needs completing when score is null)
     badge.addEventListener('click', e => {
       e.preventDefault(); e.stopPropagation();
       window.togglePanel(badge, li, result, jobData);
     });
     badge.addEventListener('keydown', e => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); window.togglePanel(badge, li, result, jobData); }
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        window.togglePanel(badge, li, result, jobData);
+      }
     });
 
     old.replaceWith(badge);
-
     _applyFilterToCard(li, _filter);
     clearTimeout(window._jsRefreshTimer);
     window._jsRefreshTimer = setTimeout(refreshFilterBar, 200);
@@ -93,12 +117,9 @@
   // ── Filter bar ─────────────────────────────────────────────────────────────
   function injectFilterBar() {
     if (_filterBar && document.contains(_filterBar)) return;
-
-    const firstBadge = document.querySelector('.js-badge:not(.js-badge--loading)');
-    if (!firstBadge) return;
-    const li   = firstBadge.closest('li');
-    if (!li) return;
-    const list = li.parentElement;
+    const firstLi = document.querySelector('li[data-js-done]');
+    if (!firstLi) return;
+    const list = firstLi.parentElement;
     if (!list) return;
     const wrap = list.parentElement;
     if (!wrap || wrap === document.body || wrap.querySelector('#js-filter-bar')) return;
@@ -117,7 +138,6 @@
 
     const btns = document.createElement('div');
     btns.className = 'js-fb-btns';
-
     [
       { filter:'all',   label:'All',     cls:'',        id:'js-fn-all'   },
       { filter:'green', label:'Strong',  cls:'--green', id:'js-fn-green' },
@@ -125,7 +145,7 @@
       { filter:'red',   label:'Skip',    cls:'--red',   id:'js-fn-red'   },
     ].forEach(({ filter, label, cls, id }) => {
       const btn = document.createElement('button');
-      btn.className = `js-fb-btn${cls ? ' js-fb-btn'+cls : ''}${filter === 'all' ? ' js-fb-btn--active' : ''}`;
+      btn.className = `js-fb-btn${cls ? ' js-fb-btn'+cls : ''}${filter==='all' ? ' js-fb-btn--active' : ''}`;
       btn.dataset.filter = filter;
       btn.innerHTML = `${label} <span class="js-fb-n" id="${id}">—</span>`;
       btn.addEventListener('click', e => {
@@ -149,32 +169,26 @@
 
   function refreshFilterBar() {
     if (!_filterBar || !document.contains(_filterBar)) { injectFilterBar(); return; }
-
     const seen   = new Set();
     const counts = { green:0, amber:0, red:0, total:0, loading:0 };
-
     document.querySelectorAll('li[data-js-done]').forEach(li => {
       const jobId = li.dataset.occludableJobId || li.dataset.jobId;
       if (jobId) { if (seen.has(jobId)) return; seen.add(jobId); }
-
       const badge = li.querySelector('.js-badge');
       if (!badge) return;
-
       if (badge.classList.contains('js-badge--loading')) { counts.loading++; counts.total++; return; }
       counts.total++;
       if      (badge.classList.contains('js-badge--green')) counts.green++;
       else if (badge.classList.contains('js-badge--amber')) counts.amber++;
       else if (badge.classList.contains('js-badge--red'))   counts.red++;
     });
-
-    const set = (id, v) => { const el=document.getElementById(id); if(el) el.textContent=v; };
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
     set('js-fn-all',   counts.total || '—');
     set('js-fn-green', counts.green);
     set('js-fn-amber', counts.amber);
     set('js-fn-red',   counts.red);
-
-    const statusEl = document.getElementById('js-fb-status');
-    if (statusEl) statusEl.textContent = counts.loading > 0 ? `Scoring ${counts.loading}…` : '';
+    const s = document.getElementById('js-fb-status');
+    if (s) s.textContent = counts.loading > 0 ? `Scoring ${counts.loading}…` : '';
   }
 
   function applyJobFilter(filter) {
@@ -183,10 +197,8 @@
   }
 
   function _applyFilterToCard(li, filter) {
-    // Keep loading cards visible always
     const badge = li.querySelector('.js-badge');
-    if (badge?.classList.contains('js-badge--loading')) { li.style.display = ''; return; }
-    if (filter === 'all') { li.style.display = ''; return; }
+    if (badge?.classList.contains('js-badge--loading') || filter === 'all') { li.style.display = ''; return; }
     const lbl = badge?.classList.contains('js-badge--green') ? 'green'
               : badge?.classList.contains('js-badge--amber') ? 'amber'
               : badge?.classList.contains('js-badge--red')   ? 'red' : 'gray';
@@ -196,15 +208,6 @@
     li.style.display = show ? '' : 'none';
   }
 
-  function findTitleEl(card) {
-    const sels = window.TITLE_SELECTORS || [];
-    for (const sel of sels) {
-      try { const el = card.querySelector(sel); if (el) return el; } catch (_) {}
-    }
-    return null;
-  }
-
-  // ── Exports ────────────────────────────────────────────────────────────────
   window.injectLoadingBadge    = injectLoadingBadge;
   window.updateBadgeWithResult = updateBadgeWithResult;
   window.injectFilterBar       = injectFilterBar;

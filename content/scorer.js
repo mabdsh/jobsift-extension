@@ -1,4 +1,4 @@
-// JobSift Scorer v2.0.0
+// JobSift Scorer v2.0.1
 // Three-tier skill system · weighted criteria · unified 0-100 score
 
 (function () {
@@ -30,7 +30,11 @@
     'swift':         ['swift','swiftui','objective-c'],
     'c#':            ['c#','csharp','c sharp','.net','dotnet','asp.net','blazor'],
     'c++':           ['c++','cpp'],
-    'go':            ['golang','go lang'],
+    // Fix #3: 'go' was missing from its own alias array.
+    // Without this, a user who adds "go" as a skill and sees a listing that
+    // says "golang" would get zero match — the alias lookup does
+    // aliases.includes('go') which returned false on ['golang','go lang'].
+    'go':            ['go','golang','go lang'],
     'rust':          ['rust','rustlang'],
     'ruby':          ['ruby','rails','ruby on rails'],
     'sql':           ['sql','mysql','postgresql','postgres','mssql','sql server','mariadb','sqlite'],
@@ -123,14 +127,12 @@
   // ══════════════════════════════════════════════════════════════════════════
 
   // 1. Technical skills — 35% weight
-  // Three tiers: critical (must-have), primary (strong), secondary (bonus)
   function scoreSkills(jobTitle, jobRaw, critical, primary, secondary) {
     const hasAny = critical.length || primary.length || secondary.length;
     if (!hasAny) return _unknown('Technical skills', 35, 'Add skills to your profile — this drives 35% of every score');
 
     const allPrimary = [...critical, ...primary];
     if (!allPrimary.length) {
-      // Only secondary: minimal info
       const bonusHits = secondary.filter(kw => matchKeyword(kw, jobTitle, jobRaw).matched);
       const value = bonusHits.length ? Math.min(0.5, bonusHits.length / secondary.length) : 0;
       return { name: 'Technical skills', status: value > 0 ? 'partial' : 'unknown',
@@ -138,26 +140,21 @@
         verdict: null, matched: [], missing: [], missingCritical: [] };
     }
 
-    // Score critical skills (each one absent is a hard hit)
     const critResults = critical.map(kw => ({ kw, ...matchKeyword(kw, jobTitle, jobRaw) }));
     const missingCritical = critResults.filter(r => !r.matched).map(r => r.kw);
 
-    // Score primary skills
     const primResults = primary.map(kw => ({ kw, ...matchKeyword(kw, jobTitle, jobRaw) }));
     const primMatched = primResults.filter(r => r.matched);
     const primMissing = primResults.filter(r => !r.matched);
 
-    // Secondary bonus
-    const secHits = secondary.filter(kw => matchKeyword(kw, jobTitle, jobRaw).matched);
+    const secHits  = secondary.filter(kw => matchKeyword(kw, jobTitle, jobRaw).matched);
     const secBonus = Math.min(0.08, secHits.length * 0.025);
 
-    // Title boost: skills found in title are 1.5x valuable
     const allResults = [...critResults.filter(r=>r.matched), ...primMatched];
-    const titleHits = allResults.filter(r => r.inTitle);
+    const titleHits  = allResults.filter(r => r.inTitle);
 
-    // Base value: weighted ratio of matched skills
     const totalTracked = critical.length + primary.length;
-    const matchScore = totalTracked > 0
+    const matchScore   = totalTracked > 0
       ? (critResults.filter(r=>r.matched).length * 1.4 + primMatched.length) / totalTracked
       : 0;
 
@@ -224,11 +221,13 @@
     if (!resolved) return _unknown('Experience fit', 15, 'No seniority signal found in listing');
 
     const display = lbl ? `${lbl} (${resolved.min}–${resolved.max} yrs)` : `${resolved.min}–${resolved.max} yrs`;
-    const overlap = Math.min(userRange.max, resolved.max) - Math.max(userRange.min, resolved.min);
-    const userMid = (userRange.min + userRange.max) / 2;
-    const jobMid  = (resolved.min + resolved.max) / 2;
+    const overlap  = Math.min(userRange.max, resolved.max) - Math.max(userRange.min, resolved.min);
+    const userMid  = (userRange.min + userRange.max) / 2;
+    const jobMid   = (resolved.min + resolved.max) / 2;
 
-    if (overlap >= 0) {
+    // Fix #7: was `>= 0` which treated exactly-touching ranges (e.g. job 4-6, user 0-4)
+    // as a pass. Requires a genuine shared year, not just a touching boundary.
+    if (overlap > 0) {
       const q = overlap / ((resolved.max - resolved.min) || 1);
       return { name:'Experience fit', status:'pass', value:q>=0.5?1.0:0.75, weight:15,
         verdict:'Good fit', note:`${display} — matches your ${expYears} yr experience` };
@@ -399,22 +398,18 @@
       criteria, warnings: _buildWarnings(profile, primary, critical),
     };
 
-    // Weighted score from known criteria
     const sum   = known.reduce((s,c) => s + c.weight * c.value, 0);
     let score   = Math.round((sum / totalW) * 100);
 
-    // Must-have skill penalties
-    const skillCrit  = criteria.find(c=>c.name==='Technical skills');
+    const skillCrit       = criteria.find(c=>c.name==='Technical skills');
     const missingCritical = skillCrit?.missingCritical || [];
     score = Math.max(0, score - missingCritical.length * 18);
 
-    // Confidence
-    const maxW   = criteria.filter(c=>c.weight>0).reduce((s,c)=>s+c.weight,0);
+    const maxW       = criteria.filter(c=>c.weight>0).reduce((s,c)=>s+c.weight,0);
     const confidence = maxW > 0 ? totalW / maxW : 0;
 
-    // Label (with caps based on missing critical skills)
     let label;
-    if (missingCritical.length >= 2)     label = 'red';
+    if (missingCritical.length >= 2)      label = 'red';
     else if (missingCritical.length === 1) label = score >= 75 ? 'amber' : 'red';
     else label = score >= 75 ? 'green' : score >= 50 ? 'amber' : 'red';
 

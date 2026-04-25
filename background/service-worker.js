@@ -4,7 +4,7 @@
 'use strict';
 
 // ─── Replace this with your Groq key before deploying ─────────────────────────
-const DEVELOPER_API_KEY = '';
+const DEVELOPER_API_KEY = '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';
 // ──────────────────────────────────────────────────────────────────────────────
 
 const GROQ_ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions';

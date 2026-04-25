@@ -1,10 +1,16 @@
-// JobSift Scraper v2.0.0
+// JobSift Scraper v2.0.1
 // Extracts job data from LinkedIn job cards — /jobs/search/ only.
 
 (function () {
   'use strict';
   if (window._jsScraper) return;
   window._jsScraper = true;
+
+  // Max characters of raw card text passed to the scorer and AI.
+  // LinkedIn cards can contain hundreds of recommended jobs in their DOM
+  // subtree — without a cap, rawText can exceed 50 KB per card and make
+  // the batch scoring prompt enormous.
+  const RAW_TEXT_LIMIT = 4000;
 
   const CARD_SELECTORS = [
     'li[data-occludable-job-id]',
@@ -53,7 +59,7 @@
     '.job-card-container__salary-info',
   ];
 
-  // ── CRITICAL FIX: require an actual job link, not just data attributes.
+  // ── CRITICAL: require an actual job link, not just data attributes.
   // LinkedIn "occludes" (empties) cards when off-screen but keeps the <li>
   // with its data-occludable-job-id. Without this check we process empty
   // shells and inject floating orphan badges.
@@ -69,14 +75,14 @@
   function findAllJobCards() {
     for (const sel of CARD_SELECTORS) {
       try {
-        const nodes = Array.from(document.querySelectorAll(sel)).filter(looksLikeJobCard);
+        const nodes   = Array.from(document.querySelectorAll(sel)).filter(looksLikeJobCard);
         const deduped = dedupe(nodes);
         if (deduped.length > 0) return deduped;
       } catch (_) {}
     }
     // Link-based fallback
     try {
-      const seen = new Set();
+      const seen       = new Set();
       const candidates = [];
       document.querySelectorAll('a[href*="/jobs/view/"], a[href*="currentJobId="]').forEach(a => {
         if (a.querySelector('.js-badge')) return;
@@ -138,8 +144,8 @@
   function detectWorkType(text) {
     if (!text) return null;
     const t = text.toLowerCase();
-    if (t.includes('remote'))                                              return 'remote';
-    if (t.includes('hybrid'))                                              return 'hybrid';
+    if (t.includes('remote'))                                                           return 'remote';
+    if (t.includes('hybrid'))                                                           return 'hybrid';
     if (t.includes('on-site')||t.includes('on site')||t.includes('onsite')||t.includes('in-person')) return 'onsite';
     return null;
   }
@@ -195,37 +201,57 @@
     return null;
   }
 
+  // Minimal safe object returned when extraction completely fails for a card.
+  // This lets the rest of the pipeline (scorer, injector) handle it gracefully
+  // instead of throwing or leaving the card with a stuck loading badge.
+  function _emptyJobData() {
+    return { jobId:'', title:'', company:'', location:'', workType:null, salary:null, experience:null, rawText:'' };
+  }
+
   function extractJobData(card) {
-    const rawText  = card.textContent || '';
-    const titleEl  = firstText(card, TITLE_SELECTORS);
-    const title    = clean(titleEl);
-    const jobUrl   = titleEl?.href || '';
-    const jobId    = card.dataset.occludableJobId ||
-                     card.dataset.jobId           ||
-                     jobUrl.match(/\/jobs\/view\/(\d+)/)?.[1]  ||
-                     jobUrl.match(/currentJobId=(\d+)/)?.[1]   || '';
+    // Wrap the entire extraction in try/catch.
+    // A single malformed card (e.g. detached from DOM mid-parse, unexpected
+    // LinkedIn DOM shape) must not abort the whole batch.
+    try {
+      // Cap rawText: card.textContent can be very large on paginated lists
+      // because LinkedIn reuses DOM nodes and may leave hidden job data inside.
+      // 4 KB is more than enough for skill matching; the full JD is fetched
+      // separately in the deep analysis flow.
+      const rawText  = (card.textContent || '').replace(/\s+/g, ' ').trim().slice(0, RAW_TEXT_LIMIT);
+      const titleEl  = firstText(card, TITLE_SELECTORS);
+      const title    = clean(titleEl);
+      const jobUrl   = titleEl?.href || '';
+      const jobId    = card.dataset.occludableJobId ||
+                       card.dataset.jobId           ||
+                       jobUrl.match(/\/jobs\/view\/(\d+)/)?.[1]  ||
+                       jobUrl.match(/currentJobId=(\d+)/)?.[1]   || '';
 
-    const company  = clean(firstText(card, COMPANY_SELECTORS));
+      const company  = clean(firstText(card, COMPANY_SELECTORS));
 
-    let metaEls = [];
-    for (const sel of METADATA_SELECTORS) {
-      try { const els = card.querySelectorAll(sel); if (els.length) { metaEls = [...els]; break; } } catch (_) {}
+      let metaEls = [];
+      for (const sel of METADATA_SELECTORS) {
+        try { const els = card.querySelectorAll(sel); if (els.length) { metaEls = [...els]; break; } } catch (_) {}
+      }
+      const metaTexts = metaEls.map(clean);
+
+      let workType = null;
+      for (const t of metaTexts) { workType = detectWorkType(t); if (workType) break; }
+      if (!workType) workType = detectWorkType(rawText);
+
+      const location = metaTexts.find(t => !detectWorkType(t) && t.length > 2) || '';
+
+      let salary = extractSalary(clean(firstText(card, SALARY_SELECTORS)));
+      if (!salary) for (const t of metaTexts) { salary = extractSalary(t); if (salary) break; }
+      if (!salary) salary = extractSalary(rawText);
+
+      const experience = extractExperience(title + ' ' + rawText);
+
+      return { jobId, title, company, location, workType, salary, experience, rawText };
+    } catch (_) {
+      // Return a safe empty object — the scorer will return a null-score gray
+      // badge, and the panel will tell the user the profile needs completing.
+      return _emptyJobData();
     }
-    const metaTexts = metaEls.map(clean);
-
-    let workType = null;
-    for (const t of metaTexts) { workType = detectWorkType(t); if (workType) break; }
-    if (!workType) workType = detectWorkType(rawText);
-
-    const location = metaTexts.find(t => !detectWorkType(t) && t.length > 2) || '';
-
-    let salary = extractSalary(clean(firstText(card, SALARY_SELECTORS)));
-    if (!salary) for (const t of metaTexts) { salary = extractSalary(t); if (salary) break; }
-    if (!salary) salary = extractSalary(rawText);
-
-    const experience = extractExperience(title + ' ' + rawText);
-
-    return { jobId, title, company, location, workType, salary, experience, rawText };
   }
 
   // ── Exports ────────────────────────────────────────────────────────────────
