@@ -103,11 +103,13 @@
 
   function renderError(panel, msg) {
     const sec = getOrCreate(panel);
-    const noKey = msg?.includes('NO_API_KEY') || msg?.includes('INVALID_KEY');
-    const rate  = msg?.includes('RATE_LIMIT');
-    const body  = rate ? 'Rate limit reached — try again shortly.'
-                : noKey ? 'Set up the API key in service-worker.js to enable deep analysis.'
-                : 'Analysis unavailable — scores are AI-generated from card data.';
+    // Backend sends 'rate_limit_exceeded' (device daily limit) or
+    // 'GROQ_RATE_LIMIT' (Groq upstream limit). Check case-insensitively
+    // so either variant is caught regardless of casing.
+    const rate = msg?.toLowerCase().includes('rate_limit');
+    const body = rate
+      ? 'Daily analysis limit reached — badge scores are still active. Resets at midnight.'
+      : 'Deep analysis temporarily unavailable — badge scores are unaffected.';
     sec.innerHTML = `<div class="js-ai-hdr">
       <span class="js-ai-badge">AI</span>
       <span class="js-ai-title">Deep analysis</span>

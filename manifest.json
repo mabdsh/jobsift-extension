@@ -1,12 +1,13 @@
 {
   "manifest_version": 3,
   "name": "JobSift — Smart Job Matching",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "Score every LinkedIn job against your profile instantly. Find the right roles faster with AI-powered matching.",
   "permissions": ["storage", "tabs"],
   "host_permissions": [
     "https://www.linkedin.com/*",
-    "https://api.groq.com/*"
+    "https://YOUR_SUBDOMAIN.duckdns.org/*",
+    "http://localhost:3000/*"
   ],
   "action": {
     "default_popup": "popup/popup.html",

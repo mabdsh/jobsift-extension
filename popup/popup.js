@@ -201,7 +201,7 @@ async function runAutofill() {
     setTimeout(() => { label.textContent = 'Auto-fill from description'; btn.disabled = false; }, 3500);
   } catch (err) {
     label.textContent = 'Auto-fill from description';
-    showMsg('afMsg', 'Failed — add your API key in service-worker.js', 'error');
+    showMsg('afMsg', 'Service temporarily unavailable — try again shortly', 'error');
     btn.disabled = false;
   }
 }
