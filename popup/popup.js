@@ -1,4 +1,5 @@
-// JobSift Popup v2.4.0
+// JobSift Popup v2.5.0
+// v2.5.0: first-run onboarding screen for new users
 // v2.4.0: email collection · deviceId storage bug fix · trial tier awareness
 
 'use strict';
@@ -22,8 +23,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   const data = await load();
   if (data?.profile) applyProfile(data.profile);
 
-  // Pre-fill email field if the user saved one previously.
-  // Email is stored in the same jobsift storage object alongside the profile.
   if (data?.email) {
     set('userEmail', data.email);
     showEmailSaved(true);
@@ -39,7 +38,51 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   setupUpgradeUI();
   initSubscriptionUI();
+
+  // ── First-run detection ─────────────────────────────────────────────────────
+  // A new user has an empty profile: no skills, no roles, no current title,
+  // no experience. The service worker sets DEFAULT_DATA on install so `data`
+  // is not null — we detect "new" by checking for any meaningful profile content.
+  // If they've partially filled the form in a previous session, we don't
+  // interrupt them with the onboarding screen again.
+  const isNewUser = !data?.profile?.currentTitle
+    && !data?.profile?.mustHaveSkills?.length
+    && !data?.profile?.primarySkills?.length
+    && !data?.profile?.targetRoles?.length
+    && !data?.profile?.experienceYears;
+
+  if (isNewUser) showOnboarding();
 });
+
+// ── Onboarding ─────────────────────────────────────────────────────────────────
+// Shown on first install. When dismissed the main content is revealed and the
+// Profile accordion is opened so the user can start filling in their details.
+
+function showOnboarding() {
+  const onb  = document.getElementById('onboarding');
+  const main = document.getElementById('mainContent');
+  if (!onb || !main) return;
+
+  onb.style.display  = 'flex';
+  main.style.display = 'none';
+
+  document.getElementById('onbStartBtn')?.addEventListener('click', dismissOnboarding);
+  document.getElementById('onbSkipBtn')?.addEventListener('click',  dismissOnboarding);
+}
+
+function dismissOnboarding() {
+  const onb  = document.getElementById('onboarding');
+  const main = document.getElementById('mainContent');
+  if (!onb || !main) return;
+
+  onb.style.display  = 'none';
+  main.style.display = 'contents'; // restores flex layout via CSS
+
+  // Auto-open Profile accordion and focus the AI description field so the user
+  // can start immediately — pasting their CV / LinkedIn bio is step 1.
+  document.getElementById('acc-profile')?.classList.add('open');
+  setTimeout(() => document.getElementById('desc')?.focus(), 100);
+}
 
 // ── Accordion ─────────────────────────────────────────────────────────────────
 function setupAccordion() {
@@ -155,9 +198,9 @@ function applyProfile(p) {
 }
 
 // ── Save ──────────────────────────────────────────────────────────────────────
-// IMPORTANT: reads existing storage first and spreads it before saving.
-// The previous version only saved { profile } which silently dropped deviceId
-// and any other stored fields, breaking AI scoring after every profile save.
+// CRITICAL FIX: reads existing storage first and spreads it before saving.
+// The previous version did `chrome.storage.local.set({ jobsift: { profile } })`
+// which silently dropped deviceId on every save, breaking AI scoring.
 async function save() {
   const profile = {
     description:      get('desc'),
@@ -176,8 +219,8 @@ async function save() {
   };
 
   try {
-    // Read existing stored data so we preserve deviceId, email, and any other
-    // fields that live alongside the profile in chrome.storage.local.
+    // Read existing stored data first — preserves deviceId, email, and any
+    // other fields that share the 'jobsift' storage key with the profile.
     const existing = await load() || {};
     await chrome.storage.local.set({ jobsift: { ...existing, profile } });
 
@@ -188,25 +231,21 @@ async function save() {
     }
   } catch (e) {
     showMsg('afMsg', '⚠ Save failed', 'error');
-    return; // don't attempt email save if profile save failed
+    return;
   }
 
-  // ── Email: send to backend if filled and different from what's stored ───────
-  // Runs after profile save so a failed email save doesn't block the profile.
+  // ── Email: send to backend if filled and not already stored ───────────────
   const emailVal = get('userEmail').toLowerCase();
   if (emailVal && emailVal.includes('@')) {
     const existing = await load() || {};
     if (emailVal !== existing.email) {
       chrome.runtime.sendMessage({ type: 'JS_SAVE_EMAIL', email: emailVal }, async (res) => {
-        if (chrome.runtime.lastError) return; // service worker not ready — will retry on next save
+        if (chrome.runtime.lastError) return;
         if (res?.ok) {
-          // Merge email into local storage alongside the profile
           const current = await load() || {};
           await chrome.storage.local.set({ jobsift: { ...current, email: emailVal } });
           showEmailSaved(true);
         }
-        // On failure we silently do nothing — the email field still shows the
-        // value the user typed, so they can try again on the next save.
       });
     }
   }
@@ -270,44 +309,40 @@ function applyParsed(p) {
     renderTags('criticalTags','critical',false);
     document.getElementById('acc-skills')?.classList.add('open');
   }
-  if (p.primarySkills?.length)  { tags.primary   = [...p.primarySkills];   renderTags('primaryTags','primary',false); }
-  if (p.secondarySkills?.length){ tags.secondary = [...p.secondarySkills];  renderTags('secondaryTags','secondary',false); }
-  if (p.dealBreakers?.length)   { tags.deal      = [...p.dealBreakers];     renderTags('dealTags','deal',true); }
-  if (p.avoidIndustries?.length){ tags.avoid     = [...p.avoidIndustries];  renderTags('avoidTags','avoid',true); }
+  if (p.primarySkills?.length) {
+    tags.primary = [...p.primarySkills];
+    renderTags('primaryTags','primary',false);
+    document.getElementById('acc-skills')?.classList.add('open');
+  }
+  if (p.secondarySkills?.length) {
+    tags.secondary = [...p.secondarySkills];
+    renderTags('secondaryTags','secondary',false);
+  }
+  if (p.dealBreakers?.length) {
+    tags.deal = [...p.dealBreakers];
+    renderTags('dealTags','deal',true);
+    document.getElementById('acc-filters')?.classList.add('open');
+  }
   updateFooter();
 }
 
 // ── Status pill ───────────────────────────────────────────────────────────────
-async function updateStatus() {
+function updateStatus() {
   const pill = document.getElementById('statusPill');
   if (!pill) return;
-  try {
-    const [tab] = await chrome.tabs.query({ active:true, currentWindow:true });
-    const url = tab?.url || '';
-    const on  = url.includes('linkedin.com/jobs') || url.includes('linkedin.com/search/results/jobs');
-    pill.textContent = on ? '● Active on Jobs' : 'Open LinkedIn Jobs';
-    pill.classList.toggle('status-pill--on', on);
-  } catch (_) {
-    pill.textContent = 'Open LinkedIn Jobs';
-  }
+  chrome.tabs.query({ active:true, currentWindow:true }, tabs => {
+    const url = tabs[0]?.url || '';
+    const onLinkedIn = url.includes('linkedin.com/jobs');
+    pill.textContent = onLinkedIn ? 'Scoring jobs…' : 'Open LinkedIn Jobs';
+    pill.className   = `status-pill${onLinkedIn ? ' status-pill--active' : ''}`;
+  });
 }
 
-// ── Footer progress ───────────────────────────────────────────────────────────
+// ── Footer — profile completeness ─────────────────────────────────────────────
 function updateFooter() {
-  const af = document.getElementById('autoFillBtn');
-  if (af) af.disabled = get('desc').trim().length < 20;
-
-  const checks = [
-    get('desc').length > 20,
-    get('currentTitle').length > 0,
-    parseInt(get('expYears')) > 0,
-    tags.roles.length > 0,
-    tags.critical.length > 0 || tags.primary.length > 0,
-    ['remote','hybrid','onsite'].some(t=>chk(`wt-${t}`)),
-    parseInt(get('minSalary')) > 0,
-  ];
-  const done = checks.filter(Boolean).length;
-  const pct  = Math.round(done / checks.length * 100);
+  const checks = COMPLETENESS_FIELDS;
+  const done   = checks.filter(f => f.check()).length;
+  const pct    = Math.round(done / checks.length * 100);
 
   const fill = document.getElementById('progressFill');
   const lbl  = document.getElementById('progressLbl');
@@ -354,11 +389,6 @@ async function loadSubscriptionStatus() {
   });
 }
 
-// Handles four tiers:
-//   disabled → paywall off, show nothing
-//   pro      → blue "PRO" badge, no upgrade banner
-//   trial    → amber "TRIAL · Xd" badge, no upgrade banner (full access)
-//   free     → no badge, show upgrade banner
 function updateSubscriptionUI(status) {
   const upgradeSection = document.getElementById('upgradeSection');
   const proBadge       = document.getElementById('proBadge');
@@ -387,7 +417,6 @@ function updateSubscriptionUI(status) {
     return;
   }
 
-  // Free user with paywall active
   upgradeSection.style.display = 'flex';
   proBadge.style.display       = 'none';
 }

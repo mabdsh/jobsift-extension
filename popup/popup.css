@@ -911,3 +911,143 @@ body {
 }
 
 .flash { animation: fieldFlash 1.1s ease forwards; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   ONBOARDING SCREEN
+   Shown to new users (empty profile) immediately after the header.
+   Dismissed via popup.js → showOnboarding() / dismissOnboarding().
+════════════════════════════════════════════════════════════════════════════ */
+.onboarding {
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 26px 22px 22px;
+  gap: 0;
+  flex: 1;
+  overflow-y: auto;
+  background: var(--bg);
+}
+
+/* Brand icon — scaled-up version of the extension icon concept */
+.onb-icon-wrap {
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #eff4ff, #dbeafe);
+  border: 1px solid rgba(37, 99, 235, 0.14);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 18px;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.1);
+}
+
+.onb-title {
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--ink);
+  letter-spacing: -0.5px;
+  line-height: 1.2;
+  margin-bottom: 9px;
+  font-family: var(--font);
+}
+
+.onb-desc {
+  font-size: 12.5px;
+  color: var(--ink-2);
+  line-height: 1.65;
+  margin-bottom: 22px;
+  max-width: 270px;
+  font-family: var(--font);
+}
+
+/* Step list */
+.onb-steps {
+  width: 100%;
+  background: #f8f9fe;
+  border: 1px solid rgba(36, 85, 232, 0.09);
+  border-radius: 12px;
+  padding: 4px 0;
+  margin-bottom: 18px;
+  text-align: left;
+}
+
+.onb-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 11px 16px;
+  border-bottom: 1px solid rgba(36, 85, 232, 0.06);
+}
+.onb-step:last-child { border-bottom: none; }
+
+/* Numbered dark navy square — mirrors the filter bar brand mark style */
+.onb-num {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, var(--dark-2), var(--dark-1));
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+  font-family: var(--font);
+}
+
+.onb-step-body { flex: 1; min-width: 0; }
+
+.onb-step-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 2px;
+  font-family: var(--font);
+}
+
+.onb-step-sub {
+  font-size: 11.5px;
+  color: var(--ink-2);
+  line-height: 1.4;
+  font-family: var(--font);
+}
+
+/* Primary CTA — blue gradient, matches the upgrade button style */
+.onb-cta {
+  width: 100%;
+  height: 42px;
+  border: none;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #2563eb, #5b7fff);
+  color: #fff;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: var(--font);
+  letter-spacing: -0.1px;
+  transition: all 0.14s;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
+  margin-bottom: 10px;
+}
+.onb-cta:hover {
+  background: linear-gradient(135deg, #1d4ed8, #4f70ff);
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4);
+  transform: translateY(-1px);
+}
+.onb-cta:active { transform: translateY(0); }
+
+/* Secondary skip link — understated, doesn't compete with CTA */
+.onb-skip {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--ink-3);
+  font-family: var(--font);
+  transition: color 0.12s;
+  padding: 4px 8px;
+}
+.onb-skip:hover { color: var(--ink-2); }

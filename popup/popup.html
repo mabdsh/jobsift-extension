@@ -11,11 +11,10 @@
 <body>
 <div class="app">
 
-  <!-- ── Header — dark navy, brand mark shows the icon concept ─────────── -->
+  <!-- ── Header — dark navy, brand mark mirrors the extension icon ───────── -->
   <header class="header">
     <div class="brand">
       <div class="brand-mark">
-        <!-- Converging lines + gem — mirrors the actual icon at small scale -->
         <svg viewBox="0 0 18 18" fill="none" width="16" height="16">
           <rect x="1"   y="3"    width="16" height="2.4" rx="1.2" fill="rgba(255,255,255,0.92)"/>
           <rect x="2.5" y="7"    width="13" height="2.4" rx="1.2" fill="rgba(255,255,255,0.58)"/>
@@ -30,283 +29,347 @@
     <div id="statusPill" class="status-pill">Open LinkedIn Jobs</div>
   </header>
 
-  <!-- ── Scroll area ───────────────────────────────────────────────────── -->
-  <div class="scroll-area">
+  <!-- ══════════════════════════════════════════════════════════════════════
+       ONBOARDING SCREEN
+       Shown only to new users (empty profile). Replaces the main content
+       until the user clicks "Set up" or "Skip". Dismissed in popup.js.
+  ══════════════════════════════════════════════════════════════════════ -->
+  <div id="onboarding" class="onboarding" style="display:none" role="main" aria-label="Welcome to JobSift">
 
-    <!-- Profile section -->
-    <div class="acc-section open" id="acc-profile">
-      <button class="acc-header" type="button">
-        <div class="acc-header-left">
-          <div class="acc-icon acc-icon--blue">
-            <svg viewBox="0 0 16 16" fill="none" width="12" height="12">
-              <circle cx="8" cy="5" r="3" stroke="currentColor" stroke-width="1.5"/>
-              <path d="M2 14c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-            </svg>
-          </div>
-          <span class="acc-title">Profile</span>
-        </div>
-        <svg class="acc-chevron" viewBox="0 0 16 16" fill="none" width="14" height="14">
-          <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </button>
-      <div class="acc-body">
-        <div class="acc-content" id="pane-profile">
-
-          <div class="ai-card">
-            <span class="ai-label">
-              <svg viewBox="0 0 16 16" fill="currentColor" width="10" height="10">
-                <path d="M8 1l1.8 3.6L14 5.3l-3 2.9.7 4.1L8 10.1l-3.7 2.2.7-4.1L2 5.3l4.2-.7L8 1z"/>
-              </svg>
-              AI Auto-fill
-            </span>
-            <label class="field-lbl" for="desc">Describe your job search</label>
-            <textarea id="desc" class="desc-area" rows="3"
-              placeholder="e.g. Senior Laravel dev, 5 yrs exp, remote, min $80K. Must know Laravel &amp; Vue. No blockchain or gambling."></textarea>
-            <button id="autoFillBtn" class="autofill-btn" disabled>
-              <svg viewBox="0 0 16 16" fill="currentColor" width="11" height="11">
-                <path d="M8 1l1.8 3.6L14 5.3l-3 2.9.7 4.1L8 10.1l-3.7 2.2.7-4.1L2 5.3l4.2-.7L8 1z"/>
-              </svg>
-              <span id="afLabel">Auto-fill from description</span>
-            </button>
-            <div id="afMsg" class="msg msg--hidden" role="alert" aria-live="polite"></div>
-          </div>
-
-          <div class="divider"><span>or fill manually</span></div>
-
-          <div class="field-row">
-            <div class="field">
-              <label class="field-lbl" for="currentTitle">Current title</label>
-              <input id="currentTitle" class="inp" type="text" placeholder="Senior PHP Developer">
-            </div>
-            <div class="field">
-              <label class="field-lbl" for="expYears">Experience</label>
-              <select id="expYears" class="inp inp-sel">
-                <option value="0">Select…</option>
-                <option value="1">0–1 yr · Fresh</option>
-                <option value="2">1–2 yrs · Junior</option>
-                <option value="4">2–4 yrs · Mid</option>
-                <option value="6">4–6 yrs · Mid-Senior</option>
-                <option value="8">6–8 yrs · Senior</option>
-                <option value="12">9–12 yrs · Staff</option>
-                <option value="15">12+ yrs · Principal</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="field">
-            <label class="field-lbl">Target roles</label>
-            <div class="tagbox" id="rolesBox">
-              <div class="taglist" id="rolesTags"></div>
-              <input class="taginp" id="rolesInp" placeholder="Laravel Developer, Backend Engineer…">
-            </div>
-            <p class="field-hint">Press Enter · Jobs matching these rank higher</p>
-          </div>
-
-          <div class="field">
-            <label class="field-lbl">Work arrangement</label>
-            <div class="chip-row">
-              <label class="chip-lbl"><input type="checkbox" id="wt-remote" class="chip-chk"><span class="chip-inner">Remote</span></label>
-              <label class="chip-lbl"><input type="checkbox" id="wt-hybrid" class="chip-chk"><span class="chip-inner">Hybrid</span></label>
-              <label class="chip-lbl"><input type="checkbox" id="wt-onsite" class="chip-chk"><span class="chip-inner">On-site</span></label>
-            </div>
-          </div>
-
-          <div class="field-row">
-            <div class="field">
-              <label class="field-lbl" for="minSalary">Min salary <span class="lbl-sub">USD/yr</span></label>
-              <div class="salary-wrap">
-                <span class="salary-sym">$</span>
-                <input id="minSalary" class="inp inp-salary" type="number" placeholder="80000" min="0" step="5000">
-              </div>
-            </div>
-            <div class="field">
-              <label class="field-lbl" for="careerGoal">Career goal <span class="lbl-sub">optional</span></label>
-              <input id="careerGoal" class="inp" type="text" placeholder="Lead backend at SaaS">
-            </div>
-          </div>
-
-          <!-- Email — for trial notifications and cross-device restore -->
-          <div class="field email-field">
-            <label class="field-lbl" for="userEmail">
-              Email <span class="lbl-sub">optional</span>
-            </label>
-            <div class="email-row">
-              <input id="userEmail" class="inp email-inp" type="email"
-                     placeholder="you@example.com" autocomplete="email">
-              <span id="emailSavedMark" class="email-saved-mark" style="display:none">
-                <svg viewBox="0 0 14 14" fill="none" width="11" height="11">
-                  <path d="M2 7.5l3.5 3.5 6.5-7" stroke="currentColor" stroke-width="1.8"
-                        stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-                Saved
-              </span>
-            </div>
-            <p class="field-hint">Get notified before your trial ends · Restore access after reinstall</p>
-          </div>
-
-        </div>
-      </div>
+    <!-- Brand graphic — large version of the extension icon concept -->
+    <div class="onb-icon-wrap">
+      <svg viewBox="0 0 36 42" fill="none" width="36" height="42">
+        <rect x="1"   y="3"  width="34" height="6"  rx="3" fill="rgba(17,30,92,0.18)"/>
+        <rect x="3"   y="13" width="30" height="6"  rx="3" fill="rgba(17,30,92,0.12)"/>
+        <rect x="5"   y="23" width="26" height="6"  rx="3" fill="rgba(17,30,92,0.07)"/>
+        <circle cx="18" cy="36.5" r="5.5" fill="#3b82f6"/>
+        <circle cx="18" cy="36.5" r="2.5" fill="white"/>
+      </svg>
     </div>
 
-    <!-- Skills section -->
-    <div class="acc-section" id="acc-skills">
-      <button class="acc-header" type="button">
-        <div class="acc-header-left">
-          <div class="acc-icon acc-icon--amber">
-            <svg viewBox="0 0 16 16" fill="none" width="12" height="12">
-              <polygon points="8,1 10,6 15,6.5 11,10.5 12.2,15.5 8,13 3.8,15.5 5,10.5 1,6.5 6,6"
-                       stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
-            </svg>
-          </div>
-          <span class="acc-title">Skills</span>
-          <span class="acc-count" id="skills-count"></span>
-        </div>
-        <svg class="acc-chevron" viewBox="0 0 16 16" fill="none" width="14" height="14">
-          <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </button>
-      <div class="acc-body">
-        <div class="acc-content" id="pane-skills">
+    <h1 class="onb-title">Score every job in seconds</h1>
+    <p class="onb-desc">Tell JobSift what you're looking for — it scores every LinkedIn listing against your profile automatically.</p>
 
-          <div class="skill-tier tier--critical">
-            <div class="tier-hdr">
-              <div class="tier-dot tier-dot--amber"></div>
-              <div class="tier-info">
-                <div class="tier-name">Critical <span class="tier-cap">max 4</span></div>
-                <div class="tier-hint">Score capped if any are missing</div>
-              </div>
-            </div>
-            <div class="tagbox tagbox--critical" id="criticalBox">
-              <div class="taglist" id="criticalTags"></div>
-              <input class="taginp" id="criticalInp" placeholder="Laravel, Vue.js…">
-            </div>
-          </div>
+    <!-- 3 steps -->
+    <div class="onb-steps">
 
-          <div class="skill-tier">
-            <div class="tier-hdr">
-              <div class="tier-dot tier-dot--blue"></div>
-              <div class="tier-info">
-                <div class="tier-name">Primary</div>
-                <div class="tier-hint">Expert-level · drives 35% of score</div>
-              </div>
-            </div>
-            <div class="tagbox" id="primaryBox">
-              <div class="taglist" id="primaryTags"></div>
-              <input class="taginp" id="primaryInp" placeholder="PHP, MySQL, Docker, Redis…">
-            </div>
-          </div>
-
-          <div class="skill-tier">
-            <div class="tier-hdr">
-              <div class="tier-dot tier-dot--gray"></div>
-              <div class="tier-info">
-                <div class="tier-name">Secondary</div>
-                <div class="tier-hint">Nice-to-have · bonus points only</div>
-              </div>
-            </div>
-            <div class="tagbox" id="secondaryBox">
-              <div class="taglist" id="secondaryTags"></div>
-              <input class="taginp" id="secondaryInp" placeholder="GraphQL, Kubernetes…">
-            </div>
-          </div>
-
+      <div class="onb-step">
+        <div class="onb-num">1</div>
+        <div class="onb-step-body">
+          <div class="onb-step-title">Paste your CV or LinkedIn bio</div>
+          <div class="onb-step-sub">AI fills your profile in seconds</div>
         </div>
       </div>
-    </div>
 
-    <!-- Filters section -->
-    <div class="acc-section" id="acc-filters">
-      <button class="acc-header" type="button">
-        <div class="acc-header-left">
-          <div class="acc-icon acc-icon--red">
-            <svg viewBox="0 0 16 16" fill="none" width="12" height="12">
-              <polygon points="14,2 2,2 7,8.5 7,14 9,13 9,8.5"
-                       stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
-            </svg>
-          </div>
-          <span class="acc-title">Filters</span>
-          <span class="acc-count acc-count--red" id="filters-count"></span>
-        </div>
-        <svg class="acc-chevron" viewBox="0 0 16 16" fill="none" width="14" height="14">
-          <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </button>
-      <div class="acc-body">
-        <div class="acc-content" id="pane-filters">
-
-          <div class="filter-block">
-            <div class="filter-block-hdr">
-              <span class="filter-block-title">Keywords to avoid</span>
-              <span class="filter-block-desc">Any match → score drops to 0</span>
-            </div>
-            <div class="tagbox tagbox--danger" id="dealBox">
-              <div class="taglist" id="dealTags"></div>
-              <input class="taginp" id="dealInp" placeholder="Blockchain, PHP, Gambling…">
-            </div>
-          </div>
-
-          <div class="filter-block">
-            <div class="filter-block-hdr">
-              <span class="filter-block-title">Industries to avoid</span>
-              <span class="filter-block-desc">Flags listings in these sectors</span>
-            </div>
-            <div class="tagbox tagbox--danger" id="avoidBox">
-              <div class="taglist" id="avoidTags"></div>
-              <input class="taginp" id="avoidInp" placeholder="Gaming, Crypto, Defense…">
-            </div>
-          </div>
-
-          <div class="filter-note">
-            <svg viewBox="0 0 14 14" fill="none" width="12" height="12" style="flex-shrink:0;margin-top:1px">
-              <circle cx="7" cy="7" r="5.5" stroke="#9AA0AD" stroke-width="1.2"/>
-              <path d="M7 6v3.5M7 4.5v.3" stroke="#9AA0AD" stroke-width="1.3" stroke-linecap="round"/>
-            </svg>
-            Deal-breakers apply before AI scoring — matched jobs score 0 regardless.
-          </div>
-
+      <div class="onb-step">
+        <div class="onb-num">2</div>
+        <div class="onb-step-body">
+          <div class="onb-step-title">Review your skills &amp; preferences</div>
+          <div class="onb-step-sub">Takes about 2 minutes to complete</div>
         </div>
       </div>
-    </div>
 
-  </div><!-- /scroll-area -->
-
-  <!-- Upgrade section — hidden by default, shown when free tier + paywall on -->
-  <div id="upgradeSection" class="upgrade-section" style="display:none">
-    <div class="upgrade-banner">
-      <div class="upgrade-info">
-        <div class="upgrade-title">Upgrade to Pro</div>
-        <div class="upgrade-limits">5 panels/day → unlimited · 7-day free trial</div>
-      </div>
-      <button class="upgrade-cta" id="upgradeBtn">$7/mo →</button>
-    </div>
-    <div class="restore-area">
-      <button class="restore-toggle-btn" id="restoreToggleBtn" type="button">Already subscribed? Restore access</button>
-      <div id="restoreForm" style="display:none">
-        <div class="restore-row">
-          <input type="email" id="restoreEmail" class="inp" placeholder="your@email.com" style="flex:1">
-          <button class="restore-submit" id="restoreBtn" type="button">Restore</button>
+      <div class="onb-step">
+        <div class="onb-num">3</div>
+        <div class="onb-step-body">
+          <div class="onb-step-title">Open LinkedIn Jobs</div>
+          <div class="onb-step-sub">Match scores appear on every listing</div>
         </div>
-        <div id="restoreMsg" class="msg msg--hidden" role="alert"></div>
       </div>
+
     </div>
+
+    <button id="onbStartBtn" class="onb-cta">Set up my profile →</button>
+    <button id="onbSkipBtn"  class="onb-skip">I'll explore first</button>
+
   </div>
+  <!-- /onboarding -->
 
-  <!-- Footer — dark navy, matches header -->
-  <footer class="footer">
-    <div class="progress-row">
-      <div class="progress-meta">
-        <span class="progress-lbl" id="progressLbl">Complete your profile</span>
-        <div id="completenessGuide" class="guide"></div>
+  <!-- ══════════════════════════════════════════════════════════════════════
+       MAIN CONTENT
+       Wrapped in #mainContent so one toggle hides everything below
+       the header while the onboarding screen is active.
+  ══════════════════════════════════════════════════════════════════════ -->
+  <div id="mainContent" style="display:contents">
+
+    <!-- Scroll area -->
+    <div class="scroll-area">
+
+      <!-- ── Profile section ────────────────────────────────────────────── -->
+      <div class="acc-section open" id="acc-profile">
+        <button class="acc-header" type="button">
+          <div class="acc-header-left">
+            <div class="acc-icon acc-icon--blue">
+              <svg viewBox="0 0 16 16" fill="none" width="12" height="12">
+                <circle cx="8" cy="5" r="3" stroke="currentColor" stroke-width="1.5"/>
+                <path d="M2 14c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <span class="acc-title">Profile</span>
+          </div>
+          <svg class="acc-chevron" viewBox="0 0 16 16" fill="none" width="14" height="14">
+            <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <div class="acc-body">
+          <div class="acc-content" id="pane-profile">
+
+            <div class="ai-card">
+              <span class="ai-label">
+                <svg viewBox="0 0 16 16" fill="currentColor" width="10" height="10">
+                  <path d="M8 1l1.8 3.6L14 5.3l-3 2.9.7 4.1L8 10.1l-3.7 2.2.7-4.1L2 5.3l4.2-.7L8 1z"/>
+                </svg>
+                AI Auto-fill
+              </span>
+              <label class="field-lbl" for="desc">Describe your job search</label>
+              <textarea id="desc" class="desc-area" rows="3"
+                placeholder="e.g. Senior Laravel dev, 5 yrs exp, remote, min $80K. Must know Laravel &amp; Vue. No blockchain or gambling."></textarea>
+              <button id="autoFillBtn" class="autofill-btn" disabled>
+                <svg viewBox="0 0 16 16" fill="currentColor" width="11" height="11">
+                  <path d="M8 1l1.8 3.6L14 5.3l-3 2.9.7 4.1L8 10.1l-3.7 2.2.7-4.1L2 5.3l4.2-.7L8 1z"/>
+                </svg>
+                <span id="afLabel">Auto-fill from description</span>
+              </button>
+              <div id="afMsg" class="msg msg--hidden" role="alert" aria-live="polite"></div>
+            </div>
+
+            <div class="divider"><span>or fill manually</span></div>
+
+            <div class="field-row">
+              <div class="field">
+                <label class="field-lbl" for="currentTitle">Current title</label>
+                <input id="currentTitle" class="inp" type="text" placeholder="Senior PHP Developer">
+              </div>
+              <div class="field">
+                <label class="field-lbl" for="expYears">Experience</label>
+                <select id="expYears" class="inp inp-sel">
+                  <option value="0">Select…</option>
+                  <option value="1">0–1 yr · Fresh</option>
+                  <option value="2">1–2 yrs · Junior</option>
+                  <option value="4">2–4 yrs · Mid</option>
+                  <option value="6">4–6 yrs · Mid-Senior</option>
+                  <option value="8">6–8 yrs · Senior</option>
+                  <option value="12">9–12 yrs · Staff</option>
+                  <option value="15">12+ yrs · Principal</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="field">
+              <label class="field-lbl">Target roles</label>
+              <div class="tagbox" id="rolesBox">
+                <div class="taglist" id="rolesTags"></div>
+                <input class="taginp" id="rolesInp" placeholder="Laravel Developer, Backend Engineer…">
+              </div>
+              <p class="field-hint">Press Enter · Jobs matching these rank higher</p>
+            </div>
+
+            <div class="field">
+              <label class="field-lbl">Work arrangement</label>
+              <div class="chip-row">
+                <label class="chip-lbl"><input type="checkbox" id="wt-remote" class="chip-chk"><span class="chip-inner">Remote</span></label>
+                <label class="chip-lbl"><input type="checkbox" id="wt-hybrid" class="chip-chk"><span class="chip-inner">Hybrid</span></label>
+                <label class="chip-lbl"><input type="checkbox" id="wt-onsite" class="chip-chk"><span class="chip-inner">On-site</span></label>
+              </div>
+            </div>
+
+            <div class="field-row">
+              <div class="field">
+                <label class="field-lbl" for="minSalary">Min salary <span class="lbl-sub">USD/yr</span></label>
+                <div class="salary-wrap">
+                  <span class="salary-sym">$</span>
+                  <input id="minSalary" class="inp inp-salary" type="number" placeholder="80000" min="0" step="5000">
+                </div>
+              </div>
+              <div class="field">
+                <label class="field-lbl" for="careerGoal">Career goal <span class="lbl-sub">optional</span></label>
+                <input id="careerGoal" class="inp" type="text" placeholder="Lead backend at SaaS">
+              </div>
+            </div>
+
+            <!-- Email — cross-device restore + trial notifications -->
+            <div class="field email-field">
+              <label class="field-lbl" for="userEmail">
+                Email <span class="lbl-sub">optional</span>
+              </label>
+              <div class="email-row">
+                <input id="userEmail" class="inp email-inp" type="email"
+                       placeholder="you@example.com" autocomplete="email">
+                <span id="emailSavedMark" class="email-saved-mark" style="display:none">
+                  <svg viewBox="0 0 14 14" fill="none" width="11" height="11">
+                    <path d="M2 7.5l3.5 3.5 6.5-7" stroke="currentColor" stroke-width="1.8"
+                          stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                  Saved
+                </span>
+              </div>
+              <p class="field-hint">Get notified before your trial ends · Restore access after reinstall</p>
+            </div>
+
+          </div>
+        </div>
       </div>
-      <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
-    </div>
-    <button id="saveBtn" class="save-btn">Save profile</button>
-    <div id="saveToast" class="save-toast save-toast--hidden" role="alert" aria-live="polite">
-      ✓ Saved — LinkedIn jobs will rescore shortly
-    </div>
-  </footer>
 
-</div>
+      <!-- ── Skills section ─────────────────────────────────────────────── -->
+      <div class="acc-section" id="acc-skills">
+        <button class="acc-header" type="button">
+          <div class="acc-header-left">
+            <div class="acc-icon acc-icon--amber">
+              <svg viewBox="0 0 16 16" fill="none" width="12" height="12">
+                <polygon points="8,1 10,6 15,6.5 11,10.5 12.2,15.5 8,13 3.8,15.5 5,10.5 1,6.5 6,6"
+                         stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+              </svg>
+            </div>
+            <span class="acc-title">Skills</span>
+            <span class="acc-count" id="skills-count"></span>
+          </div>
+          <svg class="acc-chevron" viewBox="0 0 16 16" fill="none" width="14" height="14">
+            <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <div class="acc-body">
+          <div class="acc-content" id="pane-skills">
+
+            <div class="skill-tier tier--critical">
+              <div class="tier-hdr">
+                <div class="tier-dot tier-dot--amber"></div>
+                <div class="tier-info">
+                  <div class="tier-name">Critical <span class="tier-cap">max 4</span></div>
+                  <div class="tier-hint">Score capped if any are missing</div>
+                </div>
+              </div>
+              <div class="tagbox tagbox--critical" id="criticalBox">
+                <div class="taglist" id="criticalTags"></div>
+                <input class="taginp" id="criticalInp" placeholder="Laravel, Vue.js…">
+              </div>
+            </div>
+
+            <div class="skill-tier">
+              <div class="tier-hdr">
+                <div class="tier-dot tier-dot--blue"></div>
+                <div class="tier-info">
+                  <div class="tier-name">Primary</div>
+                  <div class="tier-hint">Expert-level · drives 35% of score</div>
+                </div>
+              </div>
+              <div class="tagbox" id="primaryBox">
+                <div class="taglist" id="primaryTags"></div>
+                <input class="taginp" id="primaryInp" placeholder="PHP, MySQL, Docker, Redis…">
+              </div>
+            </div>
+
+            <div class="skill-tier">
+              <div class="tier-hdr">
+                <div class="tier-dot tier-dot--gray"></div>
+                <div class="tier-info">
+                  <div class="tier-name">Secondary</div>
+                  <div class="tier-hint">Nice-to-have · bonus points only</div>
+                </div>
+              </div>
+              <div class="tagbox" id="secondaryBox">
+                <div class="taglist" id="secondaryTags"></div>
+                <input class="taginp" id="secondaryInp" placeholder="GraphQL, Kubernetes…">
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Filters section ────────────────────────────────────────────── -->
+      <div class="acc-section" id="acc-filters">
+        <button class="acc-header" type="button">
+          <div class="acc-header-left">
+            <div class="acc-icon acc-icon--red">
+              <svg viewBox="0 0 16 16" fill="none" width="12" height="12">
+                <polygon points="14,2 2,2 7,8.5 7,14 9,13 9,8.5" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+              </svg>
+            </div>
+            <span class="acc-title">Filters</span>
+            <span class="acc-count acc-count--red" id="filters-count"></span>
+          </div>
+          <svg class="acc-chevron" viewBox="0 0 16 16" fill="none" width="14" height="14">
+            <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <div class="acc-body">
+          <div class="acc-content" id="pane-filters">
+
+            <div class="filter-block">
+              <div class="filter-block-hdr">
+                <span class="filter-block-title">Keywords to avoid</span>
+                <span class="filter-block-desc">Any match → score drops to 0</span>
+              </div>
+              <div class="tagbox tagbox--danger" id="dealBox">
+                <div class="taglist" id="dealTags"></div>
+                <input class="taginp" id="dealInp" placeholder="Blockchain, PHP, Gambling…">
+              </div>
+            </div>
+
+            <div class="filter-block">
+              <div class="filter-block-hdr">
+                <span class="filter-block-title">Industries to avoid</span>
+                <span class="filter-block-desc">Flags listings in these sectors</span>
+              </div>
+              <div class="tagbox tagbox--danger" id="avoidBox">
+                <div class="taglist" id="avoidTags"></div>
+                <input class="taginp" id="avoidInp" placeholder="Gaming, Crypto, Defense…">
+              </div>
+            </div>
+
+            <div class="filter-note">
+              <svg viewBox="0 0 14 14" fill="none" width="12" height="12" style="flex-shrink:0;margin-top:1px">
+                <circle cx="7" cy="7" r="5.5" stroke="#9CA3AF" stroke-width="1.2"/>
+                <path d="M7 6v3.5M7 4.5v.3" stroke="#9CA3AF" stroke-width="1.3" stroke-linecap="round"/>
+              </svg>
+              Deal-breakers apply before AI scoring — matched jobs score 0 regardless.
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /scroll-area -->
+
+    <!-- Upgrade section — hidden by default, shown when paywall on + free tier -->
+    <div id="upgradeSection" class="upgrade-section" style="display:none">
+      <div class="upgrade-banner">
+        <div class="upgrade-info">
+          <div class="upgrade-title">Upgrade to Pro</div>
+          <div class="upgrade-limits">5 panels/day → unlimited · 7-day free trial</div>
+        </div>
+        <button class="upgrade-cta" id="upgradeBtn">$7/mo →</button>
+      </div>
+      <div class="restore-area">
+        <button class="restore-toggle-btn" id="restoreToggleBtn" type="button">Already subscribed? Restore access</button>
+        <div id="restoreForm" style="display:none">
+          <div class="restore-row">
+            <input type="email" id="restoreEmail" class="inp" placeholder="your@email.com" style="flex:1">
+            <button class="restore-submit" id="restoreBtn" type="button">Restore</button>
+          </div>
+          <div id="restoreMsg" class="msg msg--hidden" role="alert"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer — dark navy, matches header -->
+    <footer class="footer">
+      <div class="progress-row">
+        <div class="progress-meta">
+          <span class="progress-lbl" id="progressLbl">Complete your profile</span>
+          <div id="completenessGuide" class="guide"></div>
+        </div>
+        <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+      </div>
+      <button id="saveBtn" class="save-btn">Save profile</button>
+      <div id="saveToast" class="save-toast save-toast--hidden" role="alert" aria-live="polite">
+        ✓ Saved — LinkedIn jobs will rescore shortly
+      </div>
+    </footer>
+
+  </div><!-- /mainContent -->
+
+</div><!-- /app -->
 <script src="popup.js"></script>
 </body>
 </html>
