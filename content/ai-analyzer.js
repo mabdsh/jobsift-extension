@@ -1,5 +1,6 @@
-// JobSift AI Analyzer v2.1.0
-// Panel deep analysis only — badge scoring is handled by batch in content.js
+// JobSift AI Analyzer v3.0.0
+// Renders deep analysis inside the panel — decision → summary →
+// key requirements → strengths → gaps → tips → insights
 
 (function () {
   'use strict';
@@ -26,7 +27,6 @@
     return null;
   }
 
-  // Deep analysis for the panel — runs after badge is already scored
   async function analyzeJobDeep(jobData, panelEl, li, prefs) {
     const cacheKey = jobData.jobId || jobData.title;
     if (!cacheKey) return;
@@ -39,12 +39,12 @@
     renderLoading(panelEl);
 
     try {
-      await sleep(250); // Let the panel render first
+      await sleep(300);
       const fullDesc = getFullDescription();
 
       const res = await chrome.runtime.sendMessage({
-        type: 'JS_ANALYZE_JOB',
-        profile: prefs?.profile || {},
+        type:            'JS_ANALYZE_JOB',
+        profile:         prefs?.profile || {},
         jobData,
         fullDescription: fullDesc || jobData.rawText || '',
       });
@@ -58,8 +58,10 @@
   }
 
   // ── Renderers ──────────────────────────────────────────────────────────────
+
   function renderLoading(panel) {
     const sec = getOrCreate(panel);
+    // Structured skeleton that previews the actual content layout
     sec.innerHTML = `
       <div class="js-ai-hdr">
         <span class="js-ai-badge">AI</span>
@@ -69,46 +71,86 @@
       <div class="js-shimmer">
         <div class="js-shimmer-ln js-shimmer-ln--lg"></div>
         <div class="js-shimmer-ln js-shimmer-ln--md"></div>
+        <div class="js-shimmer-ln js-shimmer-ln--xs" style="margin-top:4px"></div>
         <div class="js-shimmer-ln js-shimmer-ln--sm"></div>
+        <div class="js-shimmer-ln js-shimmer-ln--md"></div>
       </div>`;
   }
 
   function renderDeepResult(panel, r) {
     const sec = getOrCreate(panel);
+
     let html = `<div class="js-ai-hdr">
       <span class="js-ai-badge">AI</span>
       <span class="js-ai-title">Deep analysis</span>
     </div>`;
 
-    if (r.summary)      html += `<div class="js-ai-summary">${r.summary}</div>`;
+    // Decision — the most important output, shown first and prominently
+    // This is the AI's direct verdict: "Apply — your Laravel stack matches their core"
+    if (r.decision) {
+      html += `<div class="js-ai-decision">${_esc(r.decision)}</div>`;
+    }
+
+    // Summary — 2 sentence overview of role fit
+    if (r.summary) {
+      html += `<div class="js-ai-summary">${_esc(r.summary)}</div>`;
+    }
+
+    // Key requirements — what this job actually needs (extracted from JD)
+    // Helps users quickly see if they qualify before reading further
+    if (r.keyRequirements?.length) {
+      html += `<div class="js-ai-list">
+        <div class="js-ai-list-ttl js-ai-list-ttl--req">Key requirements</div>`;
+      r.keyRequirements.forEach(req => {
+        html += `<div class="js-ai-list-item js-ai-list-item--req">${_esc(req)}</div>`;
+      });
+      html += `</div>`;
+    }
+
+    // Strengths — specific matching points for THIS role
     if (r.strengths?.length) {
-      html += '<div class="js-ai-list"><div class="js-ai-list-ttl js-ai-list-ttl--strength">Strengths</div>';
-      r.strengths.forEach(s => { html += `<div class="js-ai-list-item js-ai-list-item--strength">${s}</div>`; });
-      html += '</div>';
+      html += `<div class="js-ai-list">
+        <div class="js-ai-list-ttl js-ai-list-ttl--strength">Your strengths</div>`;
+      r.strengths.forEach(s => {
+        html += `<div class="js-ai-list-item js-ai-list-item--strength">${_esc(s)}</div>`;
+      });
+      html += `</div>`;
     }
+
+    // Gaps — real gaps with what to do about them
     if (r.gaps?.length) {
-      html += '<div class="js-ai-list"><div class="js-ai-list-ttl js-ai-list-ttl--gap">Gaps to address</div>';
-      r.gaps.forEach(g => { html += `<div class="js-ai-list-item js-ai-list-item--gap">${g}</div>`; });
-      html += '</div>';
+      html += `<div class="js-ai-list">
+        <div class="js-ai-list-ttl js-ai-list-ttl--gap">Gaps to address</div>`;
+      r.gaps.forEach(g => {
+        html += `<div class="js-ai-list-item js-ai-list-item--gap">${_esc(g)}</div>`;
+      });
+      html += `</div>`;
     }
+
+    // Application tips — specific to this role
     if (r.tips?.length) {
-      html += '<div class="js-ai-list"><div class="js-ai-list-ttl js-ai-list-ttl--tip">Application tips</div>';
-      r.tips.forEach(t => { html += `<div class="js-ai-list-item js-ai-list-item--tip">${t}</div>`; });
-      html += '</div>';
+      html += `<div class="js-ai-list">
+        <div class="js-ai-list-ttl js-ai-list-ttl--tip">Application tips</div>`;
+      r.tips.forEach(t => {
+        html += `<div class="js-ai-list-item js-ai-list-item--tip">${_esc(t)}</div>`;
+      });
+      html += `</div>`;
     }
-    if (r.insights) html += `<div class="js-ai-insight">💡 ${r.insights}</div>`;
+
+    // Insight — one non-obvious observation
+    if (r.insights) {
+      html += `<div class="js-ai-insight">💡 ${_esc(r.insights)}</div>`;
+    }
 
     sec.innerHTML = html;
   }
 
   function renderError(panel, msg) {
     const sec  = getOrCreate(panel);
-    // Rate limit — check case-insensitively; backend sends 'rate_limit_exceeded'
-    const rate = msg?.toLowerCase().includes('rate_limit') || msg?.includes('RATE_LIMIT');
+    const rate = msg?.toLowerCase().includes('rate_limit') || msg?.includes('RATE_LIMIT')
+              || msg?.toLowerCase().includes('groq_parse');
 
     if (rate) {
-      // Daily analysis limit hit — show a proper upgrade prompt instead of
-      // a small muted message. This is the main upgrade path for free users.
       sec.innerHTML = `
         <div class="js-ai-hdr">
           <span class="js-ai-badge">AI</span>
@@ -122,22 +164,30 @@
               <circle cx="12" cy="16.5" r="1" fill="currentColor"/>
             </svg>
           </div>
-          <div class="js-ai-limit-title">Analysis limit reached</div>
-          <div class="js-ai-limit-sub">You've used your 3 free analyses today.<br>Badge scores are still active — resets at midnight UTC.</div>
-          <div class="js-ai-limit-upgrade">
-            <div class="js-ai-limit-pro-label">Pro includes 30 deep analyses per day</div>
-            <button class="js-ai-limit-btn" onclick="(function(){try{chrome.runtime.sendMessage({type:'JS_OPEN_UPGRADE'})}catch(e){}})()">
-              Upgrade to Pro — $7/month
-            </button>
-          </div>
+          <div class="js-ai-limit-title">Analysis temporarily unavailable</div>
+          <div class="js-ai-limit-sub">The AI service is busy — badge scores are unaffected.<br>Try opening this panel again in a moment.</div>
         </div>`;
     } else {
-      sec.innerHTML = `<div class="js-ai-hdr">
-        <span class="js-ai-badge">AI</span>
-        <span class="js-ai-title">Deep analysis</span>
-      </div>
-      <div class="js-ai-prompt js-ai-prompt--muted">Analysis temporarily unavailable — badge scores are unaffected.</div>`;
+      sec.innerHTML = `
+        <div class="js-ai-hdr">
+          <span class="js-ai-badge">AI</span>
+          <span class="js-ai-title">Deep analysis</span>
+        </div>
+        <div class="js-ai-prompt js-ai-prompt--muted">Analysis temporarily unavailable — badge scores are unaffected.</div>`;
     }
+  }
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+
+  // Escape HTML to prevent XSS from AI output being injected into innerHTML.
+  // The AI output is trusted content but sanitization is good practice.
+  function _esc(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
   }
 
   function getOrCreate(panel) {
@@ -145,6 +195,7 @@
     if (!sec) {
       sec = document.createElement('div');
       sec.className = 'js-ai-section';
+      // Insert before criteria so AI stays above the breakdown
       const criteria = panel.querySelector('.js-criteria');
       criteria ? panel.insertBefore(sec, criteria) : panel.appendChild(sec);
     }

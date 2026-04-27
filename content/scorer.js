@@ -1,5 +1,6 @@
-// JobSift Scorer v2.0.1
+// JobSift Scorer v2.1.0
 // Three-tier skill system · weighted criteria · unified 0-100 score
+// v2.1.0: O(1) alias lookup via pre-built reverse map (was O(n) per keyword)
 
 (function () {
   'use strict';
@@ -30,10 +31,6 @@
     'swift':         ['swift','swiftui','objective-c'],
     'c#':            ['c#','csharp','c sharp','.net','dotnet','asp.net','blazor'],
     'c++':           ['c++','cpp'],
-    // Fix #3: 'go' was missing from its own alias array.
-    // Without this, a user who adds "go" as a skill and sees a listing that
-    // says "golang" would get zero match — the alias lookup does
-    // aliases.includes('go') which returned false on ['golang','go lang'].
     'go':            ['go','golang','go lang'],
     'rust':          ['rust','rustlang'],
     'ruby':          ['ruby','rails','ruby on rails'],
@@ -60,6 +57,20 @@
     'microservices': ['microservices','distributed systems'],
   };
 
+  // ── Reverse alias map — built ONCE at init, O(1) lookup per keyword ───────
+  // Maps every alias string → the full alias array for its group.
+  // e.g. 'js' → ['javascript','js','ecmascript','es6','es2020','vanilla js']
+  //
+  // Before: matchKeyword scanned all Object.values(ALIASES) (~60 groups) for
+  // every skill check. With 25 cards × 15 skills × 60 groups = 22,500 iterations.
+  // After: single Map.get() call per skill = 25 × 15 = 375 lookups total.
+  const _ALIAS_MAP = new Map();
+  for (const aliases of Object.values(ALIASES)) {
+    for (const a of aliases) {
+      _ALIAS_MAP.set(a, aliases);
+    }
+  }
+
   const SENIORITY = [
     { pat: /\b(intern|internship)\b/i,     min:0,  max:1,  label:'Internship'  },
     { pat: /\bentry[\s-]level\b/i,         min:0,  max:2,  label:'Entry level' },
@@ -82,7 +93,7 @@
     } catch { return text.toLowerCase().includes(term.toLowerCase()); }
   }
 
-  // Hybrid: word-boundary for pure-word keywords, substring for special chars (c#, .net, node.js)
+  // Hybrid: word-boundary for pure-word keywords, substring for special chars
   function matchKeyword(kw, titleText, bodyText) {
     const k = kw.toLowerCase().trim();
     const t = titleText.toLowerCase();
@@ -90,19 +101,22 @@
     const isWord = /^\w+$/.test(k);
     const hit = (term, text) => isWord ? wordMatch(term, text) : text.includes(term);
 
-    if (hit(k, t)) return { matched: true, inTitle: true, via: null };
+    // Direct match first — the common case, no alias lookup needed
+    if (hit(k, t)) return { matched: true, inTitle: true,  via: null };
     if (hit(k, b)) return { matched: true, inTitle: false, via: null };
 
-    for (const aliases of Object.values(ALIASES)) {
-      if (!aliases.includes(k)) continue;
-      for (const a of aliases) {
+    // O(1) reverse map lookup — single call to get this keyword's alias group
+    const groupAliases = _ALIAS_MAP.get(k);
+    if (groupAliases) {
+      for (const a of groupAliases) {
         if (a === k) continue;
         const aIsWord = /^\w+$/.test(a);
         const aHit = (text) => aIsWord ? wordMatch(a, text) : text.includes(a);
-        if (aHit(t)) return { matched: true, inTitle: true, via: a };
+        if (aHit(t)) return { matched: true, inTitle: true,  via: a };
         if (aHit(b)) return { matched: true, inTitle: false, via: a };
       }
     }
+
     return { matched: false, inTitle: false, via: null };
   }
 
@@ -126,7 +140,7 @@
   // CRITERIA
   // ══════════════════════════════════════════════════════════════════════════
 
-  // 1. Technical skills — 35% weight
+  // 1. Technical skills — 35%
   function scoreSkills(jobTitle, jobRaw, critical, primary, secondary) {
     const hasAny = critical.length || primary.length || secondary.length;
     if (!hasAny) return _unknown('Technical skills', 35, 'Add skills to your profile — this drives 35% of every score');
@@ -135,12 +149,12 @@
     if (!allPrimary.length) {
       const bonusHits = secondary.filter(kw => matchKeyword(kw, jobTitle, jobRaw).matched);
       const value = bonusHits.length ? Math.min(0.5, bonusHits.length / secondary.length) : 0;
-      return { name: 'Technical skills', status: value > 0 ? 'partial' : 'unknown',
-        value, weight: 35, note: 'Only secondary skills set — add primary skills for accurate scoring',
-        verdict: null, matched: [], missing: [], missingCritical: [] };
+      return { name:'Technical skills', status: value > 0 ? 'partial' : 'unknown',
+        value, weight:35, note:'Only secondary skills set — add primary skills for accurate scoring',
+        verdict:null, matched:[], missing:[], missingCritical:[] };
     }
 
-    const critResults = critical.map(kw => ({ kw, ...matchKeyword(kw, jobTitle, jobRaw) }));
+    const critResults     = critical.map(kw => ({ kw, ...matchKeyword(kw, jobTitle, jobRaw) }));
     const missingCritical = critResults.filter(r => !r.matched).map(r => r.kw);
 
     const primResults = primary.map(kw => ({ kw, ...matchKeyword(kw, jobTitle, jobRaw) }));
@@ -161,7 +175,7 @@
     const value = Math.min(1, matchScore + secBonus + (titleHits.length * 0.05));
 
     let status;
-    if (value >= 0.72) status = 'pass';
+    if (value >= 0.72)  status = 'pass';
     else if (value > 0.35) status = 'partial';
     else status = 'fail';
 
@@ -173,10 +187,10 @@
     else if (missingCritical.length)
       noteparts.push(`Missing critical: ${missingCritical.join(', ')}`);
     if (primMatched.length) noteparts.push(`${primMatched.length}/${primary.length} primary matched`);
-    if (titleHits.length) noteparts.push(`${titleHits.length} in job title`);
+    if (titleHits.length)   noteparts.push(`${titleHits.length} in job title`);
 
     return {
-      name: 'Technical skills', status, value, weight: 35,
+      name:'Technical skills', status, value, weight:35,
       note: noteparts.join(' · ') || 'No skill overlap found',
       verdict: status==='pass' ? 'Strong match' : status==='partial' ? 'Partial match' : 'Skills gap',
       matched: [...critResults.filter(r=>r.matched), ...primMatched].map(r=>({kw:r.kw,inTitle:r.inTitle,via:r.via})),
@@ -185,7 +199,7 @@
     };
   }
 
-  // 2. Role alignment — 20% weight
+  // 2. Role alignment — 20%
   function scoreRole(jobTitle, targetRoles) {
     if (!targetRoles?.length || !jobTitle)
       return _unknown('Role alignment', 20, 'Add target roles to check title fit');
@@ -209,7 +223,7 @@
       verdict:'Role mismatch', note:`"${jobTitle}" doesn't match your targets (${targetRoles.slice(0,2).join(', ')})` };
   }
 
-  // 3. Experience / seniority fit — 15% weight
+  // 3. Experience / seniority — 15%
   function scoreSeniority(jobExp, jobTitle, expYears) {
     const userRange = yearsToRange(expYears);
     if (!userRange) return _unknown('Experience fit', 15, 'Set your years of experience');
@@ -225,8 +239,6 @@
     const userMid  = (userRange.min + userRange.max) / 2;
     const jobMid   = (resolved.min + resolved.max) / 2;
 
-    // Fix #7: was `>= 0` which treated exactly-touching ranges (e.g. job 4-6, user 0-4)
-    // as a pass. Requires a genuine shared year, not just a touching boundary.
     if (overlap > 0) {
       const q = overlap / ((resolved.max - resolved.min) || 1);
       return { name:'Experience fit', status:'pass', value:q>=0.5?1.0:0.75, weight:15,
@@ -237,18 +249,18 @@
       return gap <= 1.5
         ? { name:'Experience fit', status:'partial', value:0.5, weight:15, verdict:'Over-qualified',
             note:`${display} — you may be over-qualified` }
-        : { name:'Experience fit', status:'fail', value:0.2, weight:15, verdict:'Over-qualified',
+        : { name:'Experience fit', status:'fail',    value:0.2, weight:15, verdict:'Over-qualified',
             note:`${display} — significantly over-qualified at ${expYears} yrs` };
     }
     const gap = resolved.min - userMid;
     return gap <= 1.5
       ? { name:'Experience fit', status:'partial', value:0.45, weight:15, verdict:'Stretch role',
           note:`${display} — slightly above your ${expYears} yrs` }
-      : { name:'Experience fit', status:'fail', value:0, weight:15, verdict:'Under-qualified',
+      : { name:'Experience fit', status:'fail',    value:0,    weight:15, verdict:'Under-qualified',
           note:`Requires ${display} — you have ${expYears} yrs` };
   }
 
-  // 4. Work arrangement — 15% weight
+  // 4. Work arrangement — 15%
   function scoreWorkType(jobWorkType, preferred) {
     const labels = { remote:'Remote', hybrid:'Hybrid', onsite:'On-site' };
     if (!preferred?.length) return _unknown('Work arrangement', 15, 'Set your work preference to score this');
@@ -264,7 +276,7 @@
           note:`${labels[jobWorkType]||jobWorkType} — you prefer ${preferred.map(t=>labels[t]||t).join(' or ')}` };
   }
 
-  // 5. Compensation — 15% weight
+  // 5. Compensation — 15%
   function scoreCompensation(jobSalary, minSalary) {
     if (!minSalary || minSalary < 1000) return _unknown('Compensation', 15, 'Set a minimum salary to score this');
     if (!jobSalary) return _unknown('Compensation', 15,
@@ -284,7 +296,7 @@
       verdict:'Below range', note:`$${fmtK(mid)} — significantly below your $${fmtK(minSalary)} minimum` };
   }
 
-  // 6. Deal-breakers — hard override
+  // 6. Deal-breakers — hard override, 0 weight (handled separately)
   function scoreDealBreakers(jobTitle, jobRaw, dealBreakers, avoidIndustries) {
     const all = [...(dealBreakers||[]), ...(avoidIndustries||[])];
     if (!all.length) return { name:'Deal-breakers', status:'pass', value:1.0, weight:0,
@@ -377,15 +389,14 @@
       scoreDealBreakers(jobData.title, jobData.rawText, profile.dealBreakers, profile.avoidIndustries),
     ];
 
-    // Deal-breaker hard override
     const dealBreak = criteria.find(c => c.dealBreaker);
     if (dealBreak) {
       return {
-        score: 0, label: 'red', text: 'Deal-breaker matched',
-        verdict: `"${dealBreak.note.match(/"(.+)"/)?.[1]||'Keyword'}" found — skip this listing`,
-        recommendation: { text: 'Skip — deal-breaker keyword detected', level: 'danger' },
-        criteria, confidence: 1, warnings: [], missingCritical: [],
-        metCount: 0, total: criteria.length, tips: buildTips(criteria, jobData),
+        score:0, label:'red', text:'Deal-breaker matched',
+        verdict:`"${dealBreak.note.match(/"(.+)"/)?.[1]||'Keyword'}" found — skip this listing`,
+        recommendation:{ text:'Skip — deal-breaker keyword detected', level:'danger' },
+        criteria, confidence:1, warnings:[], missingCritical:[],
+        metCount:0, total:criteria.length, tips:buildTips(criteria, jobData),
       };
     }
 
@@ -409,13 +420,13 @@
     const confidence = maxW > 0 ? totalW / maxW : 0;
 
     let label;
-    if (missingCritical.length >= 2)      label = 'red';
+    if (missingCritical.length >= 2)       label = 'red';
     else if (missingCritical.length === 1) label = score >= 75 ? 'amber' : 'red';
     else label = score >= 75 ? 'green' : score >= 50 ? 'amber' : 'red';
 
     const textMap = [
-      [85, 'Exceptional fit'], [75, 'Strong match'], [65, 'Good match'],
-      [50, 'Partial match'],   [35, 'Weak fit'],     [0,  'Poor fit'],
+      [85,'Exceptional fit'],[75,'Strong match'],[65,'Good match'],
+      [50,'Partial match'],  [35,'Weak fit'],    [0, 'Poor fit'],
     ];
     const text = confidence < 0.35
       ? (score>=65 ? 'Likely good fit' : score>=45 ? 'Uncertain fit' : 'Likely poor fit')
@@ -434,9 +445,9 @@
 
     return {
       score, label, text, verdict, criteria,
-      recommendation: { text: recText, level: recLevel },
+      recommendation:{ text:recText, level:recLevel },
       confidence, warnings, missingCritical,
-      metCount, total: numKnown,
+      metCount, total:numKnown,
       tips: buildTips(criteria, jobData),
     };
   }

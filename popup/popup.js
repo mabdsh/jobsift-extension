@@ -1,4 +1,5 @@
-// JobSift Popup v2.2.1
+// JobSift Popup v2.4.0
+// v2.4.0: email collection · deviceId storage bug fix · trial tier awareness
 
 'use strict';
 
@@ -21,6 +22,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   const data = await load();
   if (data?.profile) applyProfile(data.profile);
 
+  // Pre-fill email field if the user saved one previously.
+  // Email is stored in the same jobsift storage object alongside the profile.
+  if (data?.email) {
+    set('userEmail', data.email);
+    showEmailSaved(true);
+  }
+
   updateStatus();
   updateFooter();
 
@@ -29,7 +37,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     el.addEventListener('input', updateFooter)
   );
 
-  // Subscription UI — reads from service worker cache, shows/hides upgrade section
   setupUpgradeUI();
   initSubscriptionUI();
 });
@@ -102,7 +109,6 @@ function renderTags(listId, key, danger) {
     list.appendChild(tag);
   });
 
-  // Tab badge counts
   const skillCount = tags.critical.length + tags.primary.length + tags.secondary.length;
   const sc = document.getElementById('skills-count');
   if (sc) sc.textContent = skillCount > 0 ? skillCount : '';
@@ -122,7 +128,7 @@ function renderAll() {
 
 // ── Load / apply ──────────────────────────────────────────────────────────────
 async function load() {
-  return new Promise(r => chrome.storage.local.get('jobsift', d => r(d.jobsift||null)));
+  return new Promise(r => chrome.storage.local.get('jobsift', d => r(d.jobsift || null)));
 }
 
 function applyProfile(p) {
@@ -149,6 +155,9 @@ function applyProfile(p) {
 }
 
 // ── Save ──────────────────────────────────────────────────────────────────────
+// IMPORTANT: reads existing storage first and spreads it before saving.
+// The previous version only saved { profile } which silently dropped deviceId
+// and any other stored fields, breaking AI scoring after every profile save.
 async function save() {
   const profile = {
     description:      get('desc'),
@@ -165,13 +174,48 @@ async function save() {
     avoidIndustries:  [...tags.avoid],
     careerGoal:       get('careerGoal'),
   };
+
   try {
-    await chrome.storage.local.set({ jobsift: { profile } });
+    // Read existing stored data so we preserve deviceId, email, and any other
+    // fields that live alongside the profile in chrome.storage.local.
+    const existing = await load() || {};
+    await chrome.storage.local.set({ jobsift: { ...existing, profile } });
+
     const toast = document.getElementById('saveToast');
-    if (toast) { toast.classList.remove('save-toast--hidden'); setTimeout(() => toast.classList.add('save-toast--hidden'), 3000); }
+    if (toast) {
+      toast.classList.remove('save-toast--hidden');
+      setTimeout(() => toast.classList.add('save-toast--hidden'), 3000);
+    }
   } catch (e) {
     showMsg('afMsg', '⚠ Save failed', 'error');
+    return; // don't attempt email save if profile save failed
   }
+
+  // ── Email: send to backend if filled and different from what's stored ───────
+  // Runs after profile save so a failed email save doesn't block the profile.
+  const emailVal = get('userEmail').toLowerCase();
+  if (emailVal && emailVal.includes('@')) {
+    const existing = await load() || {};
+    if (emailVal !== existing.email) {
+      chrome.runtime.sendMessage({ type: 'JS_SAVE_EMAIL', email: emailVal }, async (res) => {
+        if (chrome.runtime.lastError) return; // service worker not ready — will retry on next save
+        if (res?.ok) {
+          // Merge email into local storage alongside the profile
+          const current = await load() || {};
+          await chrome.storage.local.set({ jobsift: { ...current, email: emailVal } });
+          showEmailSaved(true);
+        }
+        // On failure we silently do nothing — the email field still shows the
+        // value the user typed, so they can try again on the next save.
+      });
+    }
+  }
+}
+
+// ── Email field helpers ────────────────────────────────────────────────────────
+function showEmailSaved(visible) {
+  const mark = document.getElementById('emailSavedMark');
+  if (mark) mark.style.display = visible ? 'inline-flex' : 'none';
 }
 
 // ── Auto-fill ─────────────────────────────────────────────────────────────────
@@ -200,34 +244,40 @@ async function runAutofill() {
     setTimeout(() => { label.textContent = 'Auto-fill from description'; btn.disabled = false; }, 3500);
   } catch (err) {
     label.textContent = 'Auto-fill from description';
-    showMsg('afMsg', 'Service temporarily unavailable — try again shortly', 'error');
     btn.disabled = false;
+    showMsg('afMsg', '⚠ Could not extract — try again or fill manually', 'error');
   }
 }
 
 function applyParsed(p) {
   if (!p) return;
-  if (p.currentTitle)    { flash('currentTitle'); set('currentTitle', p.currentTitle); }
-  if (p.experienceYears) { flash('expYears');     set('expYears', p.experienceYears); }
-  if (p.minSalary > 0)   { flash('minSalary');    set('minSalary', p.minSalary); }
-  if (p.careerGoal)      { flash('careerGoal');   set('careerGoal', p.careerGoal); }
-  if (p.workTypes?.length)     { ['remote','hybrid','onsite'].forEach(t=>setChk(`wt-${t}`,p.workTypes.includes(t))); }
-  if (p.targetRoles?.length)   { tags.roles    = [...p.targetRoles];   renderTags('rolesTags','roles',false); }
-  if (p.mustHaveSkills?.length){ tags.critical = [...p.mustHaveSkills.slice(0,MAX_CRITICAL)]; renderTags('criticalTags','critical',false);
+  if (p.currentTitle)    set('currentTitle', p.currentTitle);
+  if (p.experienceYears) set('expYears', p.experienceYears);
+  if (p.minSalary > 0)   set('minSalary', p.minSalary);
+  if (p.careerGoal)      set('careerGoal', p.careerGoal);
+  if (p.workTypes?.length) {
+    setChk('wt-remote', p.workTypes.includes('remote'));
+    setChk('wt-hybrid', p.workTypes.includes('hybrid'));
+    setChk('wt-onsite', p.workTypes.includes('onsite'));
+  }
+  if (p.targetRoles?.length) {
+    tags.roles = [...p.targetRoles];
+    renderTags('rolesTags','roles',false);
+    document.getElementById('acc-profile')?.classList.add('open');
+  }
+  if (p.mustHaveSkills?.length) {
+    tags.critical = [...p.mustHaveSkills.slice(0, MAX_CRITICAL)];
+    renderTags('criticalTags','critical',false);
     document.getElementById('acc-skills')?.classList.add('open');
   }
-  if (p.primarySkills?.length)  { tags.primary  = [...p.primarySkills];  renderTags('primaryTags','primary',false); }
-  if (p.secondarySkills?.length){ tags.secondary= [...p.secondarySkills]; renderTags('secondaryTags','secondary',false); }
-  if (p.dealBreakers?.length)   { tags.deal     = [...p.dealBreakers];   renderTags('dealTags','deal',true); }
-  if (p.avoidIndustries?.length){ tags.avoid    = [...p.avoidIndustries];renderTags('avoidTags','avoid',true); }
+  if (p.primarySkills?.length)  { tags.primary   = [...p.primarySkills];   renderTags('primaryTags','primary',false); }
+  if (p.secondarySkills?.length){ tags.secondary = [...p.secondarySkills];  renderTags('secondaryTags','secondary',false); }
+  if (p.dealBreakers?.length)   { tags.deal      = [...p.dealBreakers];     renderTags('dealTags','deal',true); }
+  if (p.avoidIndustries?.length){ tags.avoid     = [...p.avoidIndustries];  renderTags('avoidTags','avoid',true); }
   updateFooter();
 }
 
 // ── Status pill ───────────────────────────────────────────────────────────────
-// Fix #11: catch block previously did nothing, leaving the pill in its default
-// "Not on Jobs" text permanently even when the real cause was a permissions
-// error or the tab query failing. Now it shows a neutral fallback so the user
-// can at least see the pill reached a resolved state.
 async function updateStatus() {
   const pill = document.getElementById('statusPill');
   if (!pill) return;
@@ -242,7 +292,7 @@ async function updateStatus() {
   }
 }
 
-// ── Footer progress + completeness guide ──────────────────────────────────────
+// ── Footer progress ───────────────────────────────────────────────────────────
 function updateFooter() {
   const af = document.getElementById('autoFillBtn');
   if (af) af.disabled = get('desc').trim().length < 20;
@@ -289,15 +339,6 @@ function set(id, v) { const el=document.getElementById(id); if(el) el.value=v; }
 function chk(id)    { return document.getElementById(id)?.checked || false; }
 function setChk(id,v){ const el=document.getElementById(id); if(el) el.checked=!!v; }
 
-function flash(id) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.classList.remove('flash');
-  void el.offsetWidth;
-  el.classList.add('flash');
-  setTimeout(() => el.classList.remove('flash'), 1100);
-}
-
 function showMsg(id, text, type) {
   const el = document.getElementById(id);
   if (!el) return;
@@ -307,54 +348,56 @@ function showMsg(id, text, type) {
 }
 
 // ── Subscription UI ───────────────────────────────────────────────────────────
-//
-// Design: popup NEVER calls the backend directly.
-// All network calls go through the service worker via chrome.runtime.sendMessage.
-// This keeps CLIENT_SECRET and API_BASE_URL out of the popup entirely.
-
-// Read cached subscription status written by the service worker
 async function loadSubscriptionStatus() {
   return new Promise(resolve => {
     chrome.storage.local.get('jobsift_sub', d => resolve(d.jobsift_sub || null));
   });
 }
 
-// Show/hide upgrade UI based on subscription status object
+// Handles four tiers:
+//   disabled → paywall off, show nothing
+//   pro      → blue "PRO" badge, no upgrade banner
+//   trial    → amber "TRIAL · Xd" badge, no upgrade banner (full access)
+//   free     → no badge, show upgrade banner
 function updateSubscriptionUI(status) {
   const upgradeSection = document.getElementById('upgradeSection');
   const proBadge       = document.getElementById('proBadge');
   if (!upgradeSection || !proBadge) return;
 
   if (!status || !status.subscriptions_enabled) {
-    // Subscriptions are off — paywall not active, show nothing to users
     upgradeSection.style.display = 'none';
     proBadge.style.display       = 'none';
     return;
   }
 
   if (status.tier === 'pro') {
-    // Paid subscriber — show Pro badge, hide upgrade prompt
     upgradeSection.style.display = 'none';
+    proBadge.textContent         = 'PRO';
+    proBadge.className           = 'pro-badge';
     proBadge.style.display       = 'inline-flex';
     return;
   }
 
-  // Free user with paywall active — show upgrade section
+  if (status.tier === 'trial') {
+    upgradeSection.style.display = 'none';
+    const days                   = status.trial_days_left != null ? status.trial_days_left : '?';
+    proBadge.textContent         = `TRIAL · ${days}d`;
+    proBadge.className           = 'pro-badge pro-badge--trial';
+    proBadge.style.display       = 'inline-flex';
+    return;
+  }
+
+  // Free user with paywall active
   upgradeSection.style.display = 'flex';
   proBadge.style.display       = 'none';
 }
 
 async function initSubscriptionUI() {
-  // Step 1: Render immediately from cache so popup feels instant
   const cached = await loadSubscriptionStatus();
   updateSubscriptionUI(cached);
 
-  // Step 2: ALWAYS fetch fresh status from the backend via service worker.
-  // This is the critical fix — the cache may be stale if the admin toggled
-  // subscriptions on/off since the last hourly refresh. The popup opens for
-  // only a few seconds; a 200-400ms background refresh is imperceptible.
   chrome.runtime.sendMessage({ type: 'JS_REFRESH_SUB_STATUS' }, (res) => {
-    if (chrome.runtime.lastError) return; // extension context invalidated — ignore
+    if (chrome.runtime.lastError) return;
     if (res?.data) updateSubscriptionUI(res.data);
   });
 }
@@ -366,17 +409,14 @@ function setupUpgradeUI() {
   const restoreBtn    = document.getElementById('restoreBtn');
   const restoreEmail  = document.getElementById('restoreEmail');
 
-  // Upgrade button — tells the service worker to open the checkout tab.
-  // The service worker knows the backend URL; the popup does not need to.
   upgradeBtn?.addEventListener('click', () => {
     chrome.runtime.sendMessage({ type: 'JS_OPEN_UPGRADE' });
   });
 
-  // Restore access toggle
   restoreToggle?.addEventListener('click', () => {
     if (!restoreForm) return;
     const isVisible = restoreForm.style.display !== 'none';
-    restoreForm.style.display  = isVisible ? 'none' : 'block';
+    restoreForm.style.display = isVisible ? 'none' : 'block';
     if (restoreToggle) {
       restoreToggle.textContent = isVisible
         ? 'Already subscribed? Restore access'
@@ -384,7 +424,6 @@ function setupUpgradeUI() {
     }
   });
 
-  // Restore submit — sends email to service worker which calls the backend
   restoreBtn?.addEventListener('click', async () => {
     const email = restoreEmail?.value.trim();
     if (!email || !email.includes('@')) {
@@ -407,8 +446,7 @@ function setupUpgradeUI() {
         if (restoreForm) restoreForm.style.display = 'none';
         if (restoreToggle) restoreToggle.textContent = 'Already subscribed? Restore access';
       } else {
-        const msg = res.message || 'No active subscription found for this email.';
-        showMsg('restoreMsg', msg, 'error');
+        showMsg('restoreMsg', res.message || 'No active subscription found for this email.', 'error');
       }
 
       if (restoreBtn) { restoreBtn.disabled = false; restoreBtn.textContent = 'Restore'; }

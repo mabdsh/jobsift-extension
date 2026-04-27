@@ -1,5 +1,5 @@
-// JobSift Content v2.1.1
-// Flow: loading badges → batch AI score → update all → panel click → deep AI
+// JobSift Content v2.2.0
+// v2.2.0: score cache in chrome.storage.local + filter reset on navigation/reprocess
 
 (function () {
   'use strict';
@@ -10,11 +10,11 @@
   let _initDone    = false;
   let _batchTimer  = null;
   let _pollTimers  = [];
-  let _navObserver = null; // Fix #4: stored so it's never duplicated
+  let _navObserver = null;
 
-  // jobId → { jobData, result } — for panel lookup after batch completes
   const _store = new Map();
 
+  // ── Preferences ────────────────────────────────────────────────────────────
   async function loadPreferences() {
     return new Promise(r => chrome.storage.local.get('jobsift', d => r(d.jobsift || null)));
   }
@@ -24,88 +24,186 @@
     return p.startsWith('/jobs') || p.includes('/collections/') || p.startsWith('/search/results/jobs');
   }
 
-  // ── Phase 1: inject loading badges on all unprocessed cards ───────────────
+  // ── Score cache ────────────────────────────────────────────────────────────
+  // Caches AI + rule scores in chrome.storage.local so repeat visits to the
+  // same jobs page don't trigger a Groq API call.
+  //
+  // Cache key:   jobId
+  // Invalidated: profile change (profileHash mismatch) or age > 24 hours
+  // Max size:    500 entries — older entries pruned on write
+  //
+  // Storage key: 'jobsift_scores' → { [jobId]: { result, timestamp, profileHash } }
+
+  const CACHE_TTL_MS  = 24 * 60 * 60 * 1000; // 24 hours
+  const CACHE_MAX     = 500;
+
+  // Generates a string that changes whenever scoring-relevant profile fields change.
+  // Sorts each array so the hash is order-independent (adding skills in a different
+  // order doesn't invalidate the cache).
+  function _profileHash(profile) {
+    if (!profile) return '';
+    return [
+      ...(profile.mustHaveSkills  || []).slice().sort(),
+      ...(profile.primarySkills   || []).slice().sort(),
+      ...(profile.secondarySkills || []).slice().sort(),
+      ...(profile.targetRoles     || []).slice().sort(),
+      ...(profile.workTypes       || []).slice().sort(),
+      ...(profile.dealBreakers    || []).slice().sort(),
+      ...(profile.avoidIndustries || []).slice().sort(),
+      String(profile.minSalary       || 0),
+      String(profile.experienceYears || 0),
+    ].join('|');
+  }
+
+  function _isValidCacheEntry(entry, profileHash) {
+    if (!entry || !entry.result) return false;
+    if (entry.profileHash !== profileHash) return false; // profile changed
+    return (Date.now() - (entry.timestamp || 0)) < CACHE_TTL_MS;
+  }
+
+  // Removes stale entries (wrong profile hash or expired).
+  // Caps at CACHE_MAX keeping the most recent entries.
+  function _pruneCache(cache, profileHash) {
+    const now     = Date.now();
+    const valid   = Object.entries(cache).filter(
+      ([, v]) => v.profileHash === profileHash && (now - (v.timestamp || 0)) < CACHE_TTL_MS
+    );
+    if (valid.length > CACHE_MAX) {
+      valid.sort((a, b) => (b[1].timestamp || 0) - (a[1].timestamp || 0));
+      return Object.fromEntries(valid.slice(0, CACHE_MAX));
+    }
+    return Object.fromEntries(valid);
+  }
+
+  function _loadScoreCache() {
+    return new Promise(r => chrome.storage.local.get('jobsift_scores', d => r(d.jobsift_scores || {})));
+  }
+
+  function _saveScoreCache(cache) {
+    chrome.storage.local.set({ jobsift_scores: cache });
+  }
+
+  function _clearScoreCache() {
+    chrome.storage.local.remove('jobsift_scores');
+  }
+
+  // ── Phase 1: inject loading badges ────────────────────────────────────────
   function showLoadingBadges() {
     const cards = window.findAllJobCards().filter(c => {
       const li = c.closest('li') || c;
       return !li.dataset.jsDone && !li.dataset.jsProcessing;
     });
-    // Fix #5: injectLoadingBadge only accepts one argument — removed stray extractJobData call
     cards.forEach(card => window.injectLoadingBadge(card));
     return cards;
   }
 
-  // ── Phase 2: batch score all loading cards in one AI call ─────────────────
+  // ── Phase 2: batch score with cache ───────────────────────────────────────
   async function batchScore(cards) {
-    if (!cards.length || !_prefs?.profile) return;
+    if (!cards.length) return;
 
-    // Extract job data for each card, store for later
+    const profile     = _prefs?.profile || {};
+    const profileHash = _profileHash(profile);
+    const hasProfile  = !!(
+      profile.mustHaveSkills?.length ||
+      profile.primarySkills?.length  ||
+      profile.targetRoles?.length
+    );
+
+    // Extract job data for all cards
     const jobs = cards.map(card => {
       const jobData = window.extractJobData(card);
       if (jobData.jobId) _store.set(jobData.jobId, { jobData });
       return jobData;
     });
 
-    // Rule-based scoring runs immediately (provides criteria detail for panel)
+    // ── Cache check ─────────────────────────────────────────────────────────
+    // Separate cards into cached (apply immediately) and uncached (need scoring).
+    const scoreCache    = await _loadScoreCache();
+    const cachedItems   = [];   // { jobData, li, result }
+    const uncachedCards = [];
+    const uncachedJobs  = [];
+
+    cards.forEach((card, i) => {
+      const li      = card.closest('li') || card;
+      const jobData = jobs[i];
+      const entry   = jobData.jobId ? scoreCache[jobData.jobId] : null;
+
+      if (_isValidCacheEntry(entry, profileHash)) {
+        cachedItems.push({ jobData, li, result: entry.result });
+      } else {
+        uncachedCards.push(card);
+        uncachedJobs.push(jobData);
+      }
+    });
+
+    // Apply cached results immediately — no API call, no wait
+    cachedItems.forEach(({ jobData, li, result }) => {
+      if (jobData.jobId) _store.set(jobData.jobId, { jobData, result });
+      window.updateBadgeWithResult(li, result, jobData);
+    });
+
+    // If everything was cached, just refresh the UI and return
+    if (!uncachedCards.length) {
+      window.injectFilterBar();
+      window.refreshFilterBar();
+      updateExtensionBadge();
+      return;
+    }
+
+    // ── Rule-based scoring (local, instant, always runs) ────────────────────
     const ruleResults = new Map();
-    jobs.forEach(jd => {
-      const r   = window.scoreJob(jd, _prefs.profile);
+    uncachedJobs.forEach(jd => {
+      const r   = window.scoreJob(jd, profile);
       const key = jd.jobId || `${jd.title}|${jd.company}`;
       ruleResults.set(key, r);
     });
 
+    // ── AI scoring (skipped if no meaningful profile) ────────────────────────
     let aiResults      = [];
     let aiLimitReached = false;
     let aiResetAt      = null;
 
-    try {
-      const res = await chrome.runtime.sendMessage({
-        type:    'JS_BATCH_SCORE',
-        profile: _prefs.profile,
-        jobs,
-      });
-      if (res.ok) {
-        aiResults = res.results || [];
-      } else if (res.needs_upgrade) {
-        // Daily AI scoring limit hit — user needs to upgrade.
-        // We stamp every result with limitReached so the panel shows
-        // the upgrade prompt instead of rule-based criteria details.
-        aiLimitReached = true;
-        aiResetAt      = res.reset_at || null;
+    if (hasProfile) {
+      try {
+        const res = await chrome.runtime.sendMessage({
+          type:    'JS_BATCH_SCORE',
+          profile,
+          jobs:    uncachedJobs,
+        });
+        if (res.ok) {
+          aiResults = res.results || [];
+        } else if (res.needs_upgrade) {
+          aiLimitReached = true;
+          aiResetAt      = res.reset_at || null;
+        }
+      } catch (_) {
+        // Network error or timeout — fall through to rule-based silently
       }
-    } catch (_) {
-      // Network error — fall through to rule-based silently
     }
 
-    // Merge AI score with rule-based criteria and update each badge
-    cards.forEach((card, i) => {
+    // ── Merge results and update badges ─────────────────────────────────────
+    const newCacheEntries = {};
+
+    uncachedCards.forEach((card, i) => {
       const li      = card.closest('li') || card;
-      const jobData = jobs[i];
+      const jobData = uncachedJobs[i];
       const key     = jobData.jobId || `${jobData.title}|${jobData.company}`;
       const rules   = ruleResults.get(key) || {};
 
-      // When the AI limit is hit, build a special result that shows the
-      // upgrade panel instead of rule-based criteria. We still show the
-      // rule-based SCORE on the badge (local computation, always free) so
-      // the user can still see which jobs are worth looking at — but clicking
-      // the badge shows the upgrade prompt, not the full breakdown.
       if (aiLimitReached) {
-        const ruleScore = rules.score ?? null;
         const result = {
-          score:        ruleScore,
+          score:        rules.score ?? null,
           label:        rules.label || 'gray',
           text:         rules.text  || 'Limit reached',
           limitReached: true,
           resetAt:      aiResetAt,
-          // Preserve verdict so badge tooltip still makes sense
           verdict:      rules.verdict || '',
         };
         if (jobData.jobId) _store.set(jobData.jobId, { jobData, result });
         window.updateBadgeWithResult(li, result, jobData);
-        return; // skip the normal merge below
+        return;
       }
 
-      // Fix #8: only match on jobId when it is a non-empty string.
       const ai =
         (jobData.jobId
           ? aiResults.find(r => r.jobId === jobData.jobId)
@@ -113,7 +211,6 @@
         aiResults.find(r => r.jobId === String(i)) ||
         aiResults[i];
 
-      // Build unified result: AI score + rule-based criteria detail
       const result = ai
         ? {
             score:           ai.score,
@@ -129,19 +226,39 @@
             metCount:        rules.metCount        || 0,
             total:           rules.total           || 0,
           }
-        : rules; // No AI result → fall back silently to rule-based
+        : rules;
 
-      if (jobData.jobId) _store.set(jobData.jobId, { jobData, result });
+      if (jobData.jobId) {
+        _store.set(jobData.jobId, { jobData, result });
+        // Cache only meaningful scores — don't cache null/gray results from
+        // empty profiles since they'd just need re-scoring on next visit
+        if (result.score !== null) {
+          newCacheEntries[jobData.jobId] = {
+            result,
+            timestamp:   Date.now(),
+            profileHash,
+          };
+        }
+      }
+
       window.updateBadgeWithResult(li, result, jobData);
     });
 
-    // Inject/refresh filter bar once all badges are scored
+    // Persist new cache entries (merged with existing, pruned to max)
+    if (Object.keys(newCacheEntries).length) {
+      const updated = _pruneCache(
+        { ...scoreCache, ...newCacheEntries },
+        profileHash
+      );
+      _saveScoreCache(updated);
+    }
+
     window.injectFilterBar();
     window.refreshFilterBar();
     updateExtensionBadge();
   }
 
-  // Debounce: collect cards for 400ms then batch score together
+  // Debounce: collect cards for 400ms then score together
   function scheduleBatch() {
     clearTimeout(_batchTimer);
     _batchTimer = setTimeout(async () => {
@@ -150,7 +267,7 @@
     }, 400);
   }
 
-  // ── AI hook: panel open → deep analysis of full JD ────────────────────────
+  // ── AI hook ────────────────────────────────────────────────────────────────
   window._jobsiftOnPanelOpen = function (jobData, panelEl, li) {
     if (typeof window.analyzeJobDeep === 'function') {
       window.analyzeJobDeep(jobData, panelEl, li, _prefs);
@@ -184,17 +301,31 @@
       delete el.dataset.jsProcessing;
     });
     window.hidePanel?.();
+
+    // Reset filter state so new cards aren't hidden by a stale filter value.
+    // Must come AFTER removing the filter bar DOM element.
+    window.resetFilter?.();
+
     _store.clear();
     chrome.runtime.sendMessage({ type: 'SET_BADGE', count: 0 }).catch(() => {});
     startPolling();
     startObserver();
-    // _navObserver intentionally NOT reset — URL watching must persist across reprocessing
   }
 
   function listenForChanges() {
     chrome.storage.onChanged.addListener((changes, area) => {
       if (area === 'local' && changes.jobsift) {
-        _prefs = changes.jobsift.newValue;
+        const newPrefs = changes.jobsift.newValue;
+
+        // If the profile itself changed, clear the score cache so jobs
+        // are re-scored against the new profile on the next visit.
+        const oldHash = _profileHash(_prefs?.profile);
+        const newHash = _profileHash(newPrefs?.profile);
+        if (oldHash !== newHash) {
+          _clearScoreCache();
+        }
+
+        _prefs = newPrefs;
         reprocessAll();
       }
     });
@@ -202,18 +333,21 @@
 
   let _lastUrl = location.href;
 
-  // Fix #4: store the observer reference and guard against duplicate setup.
-  // Previously `new MutationObserver(...).observe(...)` created an anonymous
-  // observer on every reprocessAll() call — accumulated silently and never GC'd.
   function watchNavigation() {
-    if (_navObserver) return; // already watching — do not create a second observer
+    if (_navObserver) return;
     _navObserver = new MutationObserver(() => {
       if (location.href === _lastUrl) return;
       _lastUrl = location.href;
+
       document.querySelectorAll('[data-js-done],[data-js-processing]').forEach(el => {
         delete el.dataset.jsDone;
         delete el.dataset.jsProcessing;
       });
+
+      // Reset filter on every URL change so the new page always starts with
+      // 'All' and doesn't silently hide cards scored on the previous page.
+      window.resetFilter?.();
+
       if (isJobsPage()) setTimeout(() => { startPolling(); startObserver(); }, 400);
       else chrome.runtime.sendMessage({ type: 'SET_BADGE', count: 0 }).catch(() => {});
     });
