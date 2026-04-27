@@ -65,11 +65,16 @@ async function callBackend(endpoint, body) {
 
   if (!res.ok) {
     let errorCode = `API_ERROR_${res.status}`;
-    try { const d = await res.json(); errorCode = d.error ?? errorCode; } catch (_) {}
-    const err = new Error(errorCode);
-    err.status = res.status;
-    // Attach needs_upgrade flag so the content script can show the upgrade UI
+    let resetAt   = null;
+    try {
+      const d = await res.json();
+      errorCode = d.error    ?? errorCode;
+      resetAt   = d.reset_at ?? null;     // present in 429 responses
+    } catch (_) {}
+    const err       = new Error(errorCode);
+    err.status      = res.status;
     err.needs_upgrade = (res.status === 429);
+    err.reset_at    = resetAt;
     throw err;
   }
 
@@ -112,7 +117,12 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.type === 'JS_BATCH_SCORE') {
     callBackend('/api/score/batch', { profile: msg.profile, jobs: msg.jobs })
       .then(data => sendResponse({ ok: true, results: data.results }))
-      .catch(e  => sendResponse({ ok: false, error: e.message, needs_upgrade: !!e.needs_upgrade }));
+      .catch(e  => sendResponse({
+        ok: false,
+        error:        e.message,
+        needs_upgrade: !!e.needs_upgrade,
+        reset_at:     e.reset_at || null,
+      }));
     return true;
   }
 

@@ -102,19 +102,42 @@
   }
 
   function renderError(panel, msg) {
-    const sec = getOrCreate(panel);
-    // Backend sends 'rate_limit_exceeded' (device daily limit) or
-    // 'GROQ_RATE_LIMIT' (Groq upstream limit). Check case-insensitively
-    // so either variant is caught regardless of casing.
-    const rate = msg?.toLowerCase().includes('rate_limit');
-    const body = rate
-      ? 'Daily analysis limit reached — badge scores are still active. Resets at midnight.'
-      : 'Deep analysis temporarily unavailable — badge scores are unaffected.';
-    sec.innerHTML = `<div class="js-ai-hdr">
-      <span class="js-ai-badge">AI</span>
-      <span class="js-ai-title">Deep analysis</span>
-    </div>
-    <div class="js-ai-prompt js-ai-prompt--muted">${body}</div>`;
+    const sec  = getOrCreate(panel);
+    // Rate limit — check case-insensitively; backend sends 'rate_limit_exceeded'
+    const rate = msg?.toLowerCase().includes('rate_limit') || msg?.includes('RATE_LIMIT');
+
+    if (rate) {
+      // Daily analysis limit hit — show a proper upgrade prompt instead of
+      // a small muted message. This is the main upgrade path for free users.
+      sec.innerHTML = `
+        <div class="js-ai-hdr">
+          <span class="js-ai-badge">AI</span>
+          <span class="js-ai-title">Deep analysis</span>
+        </div>
+        <div class="js-ai-limit">
+          <div class="js-ai-limit-icon">
+            <svg viewBox="0 0 24 24" fill="none" width="20" height="20">
+              <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.8"/>
+              <line x1="12" y1="7" x2="12" y2="13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <circle cx="12" cy="16.5" r="1" fill="currentColor"/>
+            </svg>
+          </div>
+          <div class="js-ai-limit-title">Analysis limit reached</div>
+          <div class="js-ai-limit-sub">You've used your 3 free analyses today.<br>Badge scores are still active — resets at midnight UTC.</div>
+          <div class="js-ai-limit-upgrade">
+            <div class="js-ai-limit-pro-label">Pro includes 30 deep analyses per day</div>
+            <button class="js-ai-limit-btn" onclick="(function(){try{chrome.runtime.sendMessage({type:'JS_OPEN_UPGRADE'})}catch(e){}})()">
+              Upgrade to Pro — $7/month
+            </button>
+          </div>
+        </div>`;
+    } else {
+      sec.innerHTML = `<div class="js-ai-hdr">
+        <span class="js-ai-badge">AI</span>
+        <span class="js-ai-title">Deep analysis</span>
+      </div>
+      <div class="js-ai-prompt js-ai-prompt--muted">Analysis temporarily unavailable — badge scores are unaffected.</div>`;
+    }
   }
 
   function getOrCreate(panel) {

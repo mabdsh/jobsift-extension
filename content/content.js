@@ -54,16 +54,27 @@
       ruleResults.set(key, r);
     });
 
-    let aiResults = [];
+    let aiResults      = [];
+    let aiLimitReached = false;
+    let aiResetAt      = null;
+
     try {
       const res = await chrome.runtime.sendMessage({
-        type: 'JS_BATCH_SCORE',
+        type:    'JS_BATCH_SCORE',
         profile: _prefs.profile,
         jobs,
       });
-      if (res.ok) aiResults = res.results || [];
+      if (res.ok) {
+        aiResults = res.results || [];
+      } else if (res.needs_upgrade) {
+        // Daily AI scoring limit hit — user needs to upgrade.
+        // We stamp every result with limitReached so the panel shows
+        // the upgrade prompt instead of rule-based criteria details.
+        aiLimitReached = true;
+        aiResetAt      = res.reset_at || null;
+      }
     } catch (_) {
-      // AI unreachable — fall through to rule-based fallback below
+      // Network error — fall through to rule-based silently
     }
 
     // Merge AI score with rule-based criteria and update each badge
@@ -73,9 +84,28 @@
       const key     = jobData.jobId || `${jobData.title}|${jobData.company}`;
       const rules   = ruleResults.get(key) || {};
 
+      // When the AI limit is hit, build a special result that shows the
+      // upgrade panel instead of rule-based criteria. We still show the
+      // rule-based SCORE on the badge (local computation, always free) so
+      // the user can still see which jobs are worth looking at — but clicking
+      // the badge shows the upgrade prompt, not the full breakdown.
+      if (aiLimitReached) {
+        const ruleScore = rules.score ?? null;
+        const result = {
+          score:        ruleScore,
+          label:        rules.label || 'gray',
+          text:         rules.text  || 'Limit reached',
+          limitReached: true,
+          resetAt:      aiResetAt,
+          // Preserve verdict so badge tooltip still makes sense
+          verdict:      rules.verdict || '',
+        };
+        if (jobData.jobId) _store.set(jobData.jobId, { jobData, result });
+        window.updateBadgeWithResult(li, result, jobData);
+        return; // skip the normal merge below
+      }
+
       // Fix #8: only match on jobId when it is a non-empty string.
-      // An empty jobId would cause the first result in aiResults to match
-      // every card that also has no jobId, mixing up scores.
       const ai =
         (jobData.jobId
           ? aiResults.find(r => r.jobId === jobData.jobId)
@@ -90,7 +120,6 @@
             label:           ai.label,
             text:            ai.text,
             verdict:         ai.verdict,
-            // Rule-based fields — drive the panel breakdown
             criteria:        rules.criteria        || [],
             tips:            rules.tips            || [],
             recommendation:  rules.recommendation  || null,
