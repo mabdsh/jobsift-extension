@@ -1,9 +1,17 @@
-// JobSift Service Worker v3.4.0 — email collection
+// JobSift Service Worker v3.5.0 — direct LemonSqueezy checkout
 
 'use strict';
 
 const API_BASE_URL  = 'http://localhost:3000'; // replace with your DuckDNS URL
 const CLIENT_SECRET = '6fc521c67954cc87dee87f91b8def0811149c094b4f87594805485a1f40f8898';
+
+// ── LemonSqueezy checkout config ───────────────────────────────────────────────
+// Set these to your actual values from the LemonSqueezy dashboard.
+// Neither is sensitive — the store subdomain and variant ID are publicly
+// visible in any checkout URL. The checkout is opened directly from the
+// extension so it works even when the backend is unavailable.
+const LS_STORE_SUBDOMAIN = 'YOUR_STORE_SUBDOMAIN';   // e.g. 'myjobsift'
+const LS_VARIANT_ID      = 'YOUR_VARIANT_ID';         // e.g. '123456'
 
 const SUB_STATUS_TTL_MS  = 60 * 60 * 1000;
 const BACKEND_TIMEOUT_MS = 8000;
@@ -142,10 +150,6 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
 
   // ── Email collection ───────────────────────────────────────────────────────
-  // Called by the popup when the user fills in their optional email field.
-  // Sends the email to the backend to store on their device record.
-  // On success the popup stores the email locally so the field pre-fills
-  // on next open and shows the "Saved" checkmark.
   if (msg.type === 'JS_SAVE_EMAIL') {
     const email = (msg.email || '').trim().toLowerCase();
     if (!email || !email.includes('@')) {
@@ -172,7 +176,6 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         const data = await res.json();
         sendResponse({ ok: res.ok, message: data.message || '' });
       } catch (_) {
-        // Timeout or network error — popup will silently retry on next save
         sendResponse({ ok: false, message: 'Network error — email not saved yet.' });
       }
     });
@@ -216,12 +219,21 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return true;
   }
 
+  // ── Upgrade — open LemonSqueezy checkout directly ──────────────────────────
+  // The checkout URL is built entirely in the extension. This works even when
+  // the backend is down — no backend call is made for this flow at all.
+  // The device_id is embedded as custom checkout data so the webhook can
+  // match the payment back to this device after the user completes checkout.
   if (msg.type === 'JS_OPEN_UPGRADE') {
     getDeviceId().then(deviceId => {
-      if (deviceId) {
-        chrome.tabs.create({ url: `${API_BASE_URL}/upgrade?device=${deviceId}` });
-      }
-      sendResponse({ ok: !!deviceId });
+      if (!deviceId) { sendResponse({ ok: false }); return; }
+
+      const checkoutUrl =
+        `https://${LS_STORE_SUBDOMAIN}.lemonsqueezy.com/checkout/buy/${LS_VARIANT_ID}` +
+        `?checkout[custom][device_id]=${deviceId}`;
+
+      chrome.tabs.create({ url: checkoutUrl });
+      sendResponse({ ok: true });
     });
     return true;
   }

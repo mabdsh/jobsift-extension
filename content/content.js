@@ -1,4 +1,5 @@
-// JobSift Content v2.2.0
+// JobSift Content v2.3.0
+// v2.3.0: fix SPA navigation — badges now appear when clicking Jobs tab from any LinkedIn page
 // v2.2.0: score cache in chrome.storage.local + filter reset on navigation/reprocess
 
 (function () {
@@ -335,33 +336,54 @@
 
   function watchNavigation() {
     if (_navObserver) return;
-    _navObserver = new MutationObserver(() => {
+
+    // setInterval URL polling is more reliable than MutationObserver for SPA
+    // navigation detection. LinkedIn's pushState fires BEFORE DOM mutations,
+    // so a MutationObserver callback can fire while location.href still shows
+    // the old URL — causing the URL-change logic to miss the navigation entirely.
+    //
+    // A 400ms interval with a string compare is immune to these race conditions,
+    // uses negligible CPU (<1μs per tick), and guarantees detection within 400ms.
+    _navObserver = setInterval(() => {
       if (location.href === _lastUrl) return;
       _lastUrl = location.href;
 
+      // Clear scored-card markers so new page cards get fresh badges
       document.querySelectorAll('[data-js-done],[data-js-processing]').forEach(el => {
         delete el.dataset.jsDone;
         delete el.dataset.jsProcessing;
       });
 
-      // Reset filter on every URL change so the new page always starts with
-      // 'All' and doesn't silently hide cards scored on the previous page.
+      // Reset filter so new page always starts at "All"
       window.resetFilter?.();
 
-      if (isJobsPage()) setTimeout(() => { startPolling(); startObserver(); }, 400);
-      else chrome.runtime.sendMessage({ type: 'SET_BADGE', count: 0 }).catch(() => {});
-    });
-    _navObserver.observe(document.body, { childList: true, subtree: true });
+      if (isJobsPage()) {
+        // 200ms lets LinkedIn begin rendering the job list before we scan for cards
+        setTimeout(() => { startPolling(); startObserver(); }, 200);
+      } else {
+        chrome.runtime.sendMessage({ type: 'SET_BADGE', count: 0 }).catch(() => {});
+      }
+    }, 400);
   }
 
   async function init() {
-    if (_initDone || !isJobsPage()) return;
+    if (_initDone) return;
     _initDone = true;
     _prefs    = await loadPreferences();
-    startPolling();
-    startObserver();
+
+    // Always set up these listeners regardless of the current page.
+    // watchNavigation detects SPA navigation to /jobs from any other page
+    // (e.g. feed → jobs tab click). Without this, users who start on /feed
+    // never get badges until they reload — the observer simply wasn't running.
     listenForChanges();
     watchNavigation();
+
+    // Scoring only starts if already on a jobs page on initial load.
+    // If the user navigates here later, watchNavigation handles it.
+    if (isJobsPage()) {
+      startPolling();
+      startObserver();
+    }
   }
 
   init();

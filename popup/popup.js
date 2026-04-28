@@ -1,4 +1,5 @@
-// JobSift Popup v2.5.0
+// JobSift Popup v2.6.0
+// v2.6.0: manage billing section for Pro users
 // v2.5.0: first-run onboarding screen for new users
 // v2.4.0: email collection · deviceId storage bug fix · trial tier awareness
 
@@ -389,36 +390,66 @@ async function loadSubscriptionStatus() {
   });
 }
 
+// Three sections controlled by tier:
+//
+//   upgradeSection       — shown for free tier (paywall on)
+//   manageBillingSection — shown for pro tier
+//   proBadge             — shown for pro and trial tiers
+//   upgradeSection       — hidden for pro and trial
+//
+// When subscriptions are disabled globally (soft launch mode), none of these
+// sections are shown — everyone has Pro access silently.
 function updateSubscriptionUI(status) {
-  const upgradeSection = document.getElementById('upgradeSection');
-  const proBadge       = document.getElementById('proBadge');
-  if (!upgradeSection || !proBadge) return;
+  const upgradeSection       = document.getElementById('upgradeSection');
+  const manageBillingSection = document.getElementById('manageBillingSection');
+  const proBadge             = document.getElementById('proBadge');
 
+  if (!upgradeSection || !manageBillingSection || !proBadge) return;
+
+  // Subscriptions disabled or no status cached → hide everything
   if (!status || !status.subscriptions_enabled) {
-    upgradeSection.style.display = 'none';
-    proBadge.style.display       = 'none';
+    upgradeSection.style.display       = 'none';
+    manageBillingSection.style.display = 'none';
+    proBadge.style.display             = 'none';
     return;
   }
 
   if (status.tier === 'pro') {
-    upgradeSection.style.display = 'none';
-    proBadge.textContent         = 'PRO';
-    proBadge.className           = 'pro-badge';
-    proBadge.style.display       = 'inline-flex';
+    upgradeSection.style.display       = 'none';
+    manageBillingSection.style.display = 'flex';
+
+    proBadge.className   = 'pro-badge';
+    proBadge.textContent = 'Pro';
+    proBadge.style.display = 'inline-flex';
     return;
   }
 
   if (status.tier === 'trial') {
-    upgradeSection.style.display = 'none';
-    const days                   = status.trial_days_left != null ? status.trial_days_left : '?';
-    proBadge.textContent         = `TRIAL · ${days}d`;
-    proBadge.className           = 'pro-badge pro-badge--trial';
-    proBadge.style.display       = 'inline-flex';
+    upgradeSection.style.display       = 'none';
+    manageBillingSection.style.display = 'none';
+
+    const days = status.trial_days_left != null ? status.trial_days_left : 7;
+    const ring = `<span class="badge-ring"><span class="badge-ring-dot"></span></span>`;
+
+    if (days <= 1) {
+      proBadge.className = 'pro-badge pro-badge--trial pro-badge--trial-warn pro-badge--trial-urgent';
+      proBadge.innerHTML = `${ring}<span class="badge-text"><strong>Last</strong> day of trial</span>`;
+    } else if (days <= 3) {
+      proBadge.className = 'pro-badge pro-badge--trial pro-badge--trial-warn';
+      proBadge.innerHTML = `${ring}<span class="badge-text">Trial <strong>${days}</strong>d left</span>`;
+    } else {
+      proBadge.className = 'pro-badge pro-badge--trial';
+      proBadge.innerHTML = `${ring}<span class="badge-text">Trial <strong>${days}</strong>d left</span>`;
+    }
+
+    proBadge.style.display = 'inline-flex';
     return;
   }
 
-  upgradeSection.style.display = 'flex';
-  proBadge.style.display       = 'none';
+  // Free tier — show upgrade section
+  upgradeSection.style.display       = 'flex';
+  manageBillingSection.style.display = 'none';
+  proBadge.style.display             = 'none';
 }
 
 async function initSubscriptionUI() {

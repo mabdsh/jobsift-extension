@@ -113,26 +113,135 @@ body {
   color: #6ee7b7;
 }
 
-/* Pro badge — visible on dark header */
+/* ── Tier badges — PRO / Trial healthy / Trial warning / Trial urgent ────────
+   Single-pill design: ring icon + natural phrase ("Trial  7d left").
+   No split segments, no all-caps labels, no harsh inner borders.
+   Three urgency tiers: amber (healthy) → red (≤3d) → urgent pulse (1d).
+─────────────────────────────────────────────────────────────────────────── */
+
+/* PRO — glassy white pill with rotated gem diamond */
 .pro-badge {
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  padding: 2px 7px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 11px;
   border-radius: 99px;
-  background: rgba(255,255,255,0.15);
-  color: #fff;
-  border: 1px solid rgba(255,255,255,0.25);
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.15);
+  box-shadow: 0 0 14px rgba(255,255,255,0.04), inset 0 1px 0 rgba(255,255,255,0.08);
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.75);
+  letter-spacing: .02em;
+  font-family: var(--font);
   flex-shrink: 0;
+  text-transform: none;
 }
 
+/* Rotated blue-purple diamond gem before "Pro" */
+.pro-badge::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: linear-gradient(135deg, #60a5fa, #818cf8);
+  transform: rotate(45deg);
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+/* Trial pill — shared base structure */
 .pro-badge--trial {
-  background: rgba(251,191,36,0.18);
-  border-color: rgba(251,191,36,0.4);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 11px;
+  border-radius: 99px;
+  background: rgba(251,191,36,0.08);
+  border: 1px solid rgba(251,191,36,0.2);
+  box-shadow: 0 0 14px rgba(251,191,36,0.08), inset 0 1px 0 rgba(255,255,255,0.05);
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.55);
+  font-family: var(--font);
+  flex-shrink: 0;
+  text-transform: none;
+  letter-spacing: 0;
+  /* Reset any inherited styles from .pro-badge fallback */
+  background-image: none;
+}
+
+/* Remove the gem ::before on trial badges */
+.pro-badge--trial::before { display: none; }
+
+/* Thin circle ring — renders as the "icon" before the text.
+   JS injects .badge-ring inside the element for the ring + inner dot. */
+.badge-ring {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(251,191,36,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.badge-ring-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #f59e0b;
+}
+
+/* Badge text: muted "Trial" + highlighted number */
+.badge-text       { color: rgba(255,255,255,0.55); }
+.badge-text strong {
   color: #fde68a;
-  font-size: 8.5px;
-  letter-spacing: 0.04em;
+  font-weight: 700;
+  font-size: 12px;
+  margin: 0 1px;
+}
+
+/* Warning ≤3 days — red shift, same shape */
+.pro-badge--trial-warn {
+  background: rgba(239,68,68,0.08);
+  border-color: rgba(239,68,68,0.22);
+  box-shadow: 0 0 14px rgba(239,68,68,0.1), inset 0 1px 0 rgba(255,255,255,0.04);
+}
+.pro-badge--trial-warn .badge-ring {
+  border-color: rgba(239,68,68,0.5);
+}
+.pro-badge--trial-warn .badge-ring-dot {
+  background: #ef4444;
+}
+.pro-badge--trial-warn .badge-text strong {
+  color: #fca5a5;
+}
+
+/* Urgent — 1 day left: subtle pulse on the glow only */
+.pro-badge--trial-urgent {
+  background: rgba(239,68,68,0.1);
+  border-color: rgba(239,68,68,0.28);
+  animation: trialGlow 2.4s ease-in-out infinite;
+}
+.pro-badge--trial-urgent .badge-ring {
+  border-color: rgba(239,68,68,0.55);
+}
+.pro-badge--trial-urgent .badge-ring-dot {
+  background: #ef4444;
+  animation: trialDotBlink 1.2s ease-in-out infinite;
+}
+.pro-badge--trial-urgent .badge-text strong {
+  color: #fca5a5;
+}
+
+@keyframes trialGlow {
+  0%, 100% { box-shadow: 0 0 8px rgba(239,68,68,0.08),  inset 0 1px 0 rgba(255,255,255,0.04); }
+  50%       { box-shadow: 0 0 18px rgba(239,68,68,0.22), inset 0 1px 0 rgba(255,255,255,0.04); }
+}
+@keyframes trialDotBlink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: .2; }
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -798,6 +907,55 @@ body {
 
 .restore-submit:hover { border-color: var(--accent); color: var(--accent); }
 .restore-submit:disabled { opacity: .5; cursor: not-allowed; }
+
+/* ── Manage billing section ─────────────────────────────────────────────────
+   Shown below the scroll area when user is on Pro tier.
+   Mirrors the visual weight of the upgrade-section but green-tinted
+   to signal an active/positive state rather than a sales prompt.
+──────────────────────────────────────────────────────────────────────────── */
+.manage-billing-section {
+  display: flex;
+  align-items: center;
+  padding: 10px 14px;
+  background: #f0fdf4;
+  border-top: 1px solid #bbf7d0;
+  flex-shrink: 0;
+}
+
+.manage-billing-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 8px;
+}
+
+.manage-billing-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.manage-billing-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #15803d;
+  letter-spacing: 0.01em;
+}
+
+.manage-billing-link {
+  font-size: 12px;
+  font-weight: 500;
+  color: #2563eb;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color 0.15s;
+}
+
+.manage-billing-link:hover {
+  color: #1d4ed8;
+  text-decoration: underline;
+}
 
 /* ══════════════════════════════════════════════════════════════════════════
    FOOTER — dark navy, matches header
