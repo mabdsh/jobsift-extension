@@ -13,10 +13,12 @@
 
   // ── Job description selectors ──────────────────────────────────────────────
   // Priority order:
-  //   1. data-testid="expandable-text-box" — stable across DOM refactors (NEW PRIMARY)
-  //   2. Legacy class selectors — kept as fallbacks for older LinkedIn layouts
+  //   1. data-testid="expandable-text-box" — stable across LinkedIn DOM refactors (PRIMARY)
+  //   2. #jobDescriptionText — stable Indeed ID (PRIMARY for Indeed)
+  //   3. Legacy LinkedIn class selectors — fallbacks for older layouts
   const JD_SELECTORS = [
     '[data-testid="expandable-text-box"]',
+    '#jobDescriptionText',
     '.jobs-description-content__text',
     '.jobs-description__content',
     '[class*="jobs-description-content__text"]',

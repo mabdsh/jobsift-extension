@@ -323,12 +323,178 @@
     }
   }
 
+  // ── Indeed support ─────────────────────────────────────────────────────────
+  // All selectors use data-testid or stable semantic class names, not the
+  // obfuscated CSS-module class names that Indeed refreshes on deploys.
+
+  function isIndeedPage() {
+    return location.hostname.includes('indeed.com');
+  }
+
+  // Covers:
+  //   /jobs, /jobs?q=...        — standard search pages
+  //   /q-...-jobs.html          — category search pages
+  //   / (homepage job feed)     — logged-in "Jobs for you" page
+  //   any other Indeed path     — detected by presence of #mosaic-provider-jobcards
+  //                               (stable ID present on ALL Indeed listing pages)
+  // Using a DOM check as the catch-all is safe because content scripts run at
+  // document_idle, so the DOM is fully loaded when this is first called.
+  function isIndeedSearchPage() {
+    if (!isIndeedPage()) return false;
+    const p = location.pathname;
+    if (p === '/jobs' || p.startsWith('/jobs') || /\/q-.*-jobs/.test(p)) return true;
+    // Homepage and recommendation feeds — detect by the stable job card container
+    return !!document.querySelector('#mosaic-provider-jobcards');
+  }
+
+  // /viewjob?jk=... — direct link to a single job
+  function isIndeedDirectViewPage() {
+    return isIndeedPage() && location.pathname === '/viewjob';
+  }
+
+  // A real Indeed job card must have a data-jk anchor and not be a hidden
+  // duplicate (Indeed renders aria-hidden="true" clones for accessibility).
+  function looksLikeIndeedCard(el) {
+    if (!el || el.nodeType !== 1) return false;
+    if (!el.classList.contains('cardOutline')) return false;
+    if (!el.querySelector('a[data-jk]')) return false;
+    // Exclude hidden duplicate cards
+    const li = el.closest('li');
+    if (li && li.getAttribute('aria-hidden') === 'true') return false;
+    if (el.getAttribute('aria-hidden') === 'true') return false;
+    return true;
+  }
+
+  function findAllIndeedCards() {
+    return Array.from(document.querySelectorAll('div.cardOutline'))
+      .filter(looksLikeIndeedCard);
+  }
+
+  function findIndeedCardsIn(root) {
+    if (!root || root.nodeType !== 1) return [];
+    const found = new Set();
+    if (looksLikeIndeedCard(root)) found.add(root);
+    root.querySelectorAll?.('div.cardOutline').forEach(el => {
+      if (looksLikeIndeedCard(el)) found.add(el);
+    });
+    return Array.from(found);
+  }
+
+  // Converts an Indeed salary string like "Rs 40,000 - Rs 45,000 a month"
+  // or "$50,000 - $70,000 a year" into our { low, high, midpoint } format.
+  // Falls back to the generic extractSalary() for standard currency symbols.
+  function extractIndeedSalary(text) {
+    if (!text) return null;
+    // Handle Pakistani rupee "Rs X,XXX" format
+    const rsPat = /Rs\.?\s*([\d,]+)\s*[-–]\s*Rs\.?\s*([\d,]+)/i;
+    const rsM   = text.match(rsPat);
+    if (rsM) {
+      const lo = parseFloat(rsM[1].replace(/,/g, ''));
+      const hi = parseFloat(rsM[2].replace(/,/g, ''));
+      return { low: lo, high: hi, midpoint: Math.round((lo + hi) / 2) };
+    }
+    // Fall through to generic extractor
+    return extractSalary(text);
+  }
+
+  function extractIndeedJobData(card) {
+    try {
+      const anchor = card.querySelector('a[data-jk]');
+      const jobId  = anchor?.dataset?.jk || '';
+
+      // Title — prefer span[title] which is exactly the job title without markup
+      const titleEl = card.querySelector('h2.jobTitle a span[title], a[data-jk] span[title]');
+      const title   = titleEl?.title || titleEl?.textContent?.trim() || '';
+
+      const companyEl = card.querySelector('[data-testid="company-name"]');
+      const company   = companyEl?.textContent?.replace(/\s+/g, ' ').trim() || '';
+
+      const locationEl = card.querySelector('[data-testid="text-location"]');
+      const jobLocation = locationEl?.textContent?.replace(/\s+/g, ' ').trim() || '';
+
+      // Salary — data-testid contains "salary-snippet" on the li wrapper
+      const salaryEl  = card.querySelector('[data-testid*="salary-snippet"] span');
+      const salaryTxt = salaryEl?.textContent?.trim() || '';
+
+      // Raw text capped for scorer and AI
+      const rawText = (card.textContent || '').replace(/\s+/g, ' ').trim().slice(0, RAW_TEXT_LIMIT);
+
+      const workType  = detectWorkType(jobLocation + ' ' + rawText);
+      const salary    = extractIndeedSalary(salaryTxt) || extractIndeedSalary(rawText);
+      const experience = extractExperience(title + ' ' + rawText);
+
+      return { jobId, title, company, location: jobLocation, workType, salary, experience, rawText };
+    } catch (_) {
+      return { jobId: '', title: '', company: '', location: '', workType: null, salary: null, experience: null, rawText: '' };
+    }
+  }
+
+  // Extracts job data from Indeed's right-pane detail view or direct /viewjob page.
+  // Stable selectors only — no obfuscated CSS classes.
+  function extractIndeedDetailData() {
+    try {
+      // Job ID — query param is the most reliable source
+      const params = new URLSearchParams(location.search);
+      const jobId  = params.get('jk') || params.get('vjk') || '';
+
+      // Title — strip the "- job post" suffix Indeed appends
+      const titleEl = document.querySelector(
+        '#jobsearch-ViewjobPaneWrapper h2.jobsearch-JobInfoHeader-title span:first-child, ' +
+        'h2.jobsearch-JobInfoHeader-title span:first-child'
+      );
+      const title = titleEl
+        ? titleEl.textContent.replace(/[-–]\s*job post\s*$/i, '').trim()
+        : document.title.replace(/\s*[|\-–].*$/i, '').trim();
+
+      // Company name
+      const companyEl = document.querySelector(
+        '[data-testid="inlineHeader-companyName"] a, ' +
+        '[data-company-name="true"] span a, ' +
+        '[data-company-name="true"] span'
+      );
+      const company = companyEl?.textContent?.replace(/\s+/g, ' ').trim() || '';
+
+      // Location
+      const locationEl = document.querySelector(
+        '[data-testid="inlineHeader-companyLocation"] div, ' +
+        '[data-testid="inlineHeader-companyLocation"]'
+      );
+      const jobLocation = locationEl?.textContent?.replace(/\s+/g, ' ').trim() || '';
+
+      // Full description — #jobDescriptionText is a stable ID on Indeed
+      const descEl  = document.querySelector('#jobDescriptionText');
+      const rawText = descEl
+        ? descEl.textContent.replace(/\s+/g, ' ').trim().slice(0, RAW_TEXT_LIMIT)
+        : (document.body.innerText || '').replace(/\s+/g, ' ').trim().slice(0, RAW_TEXT_LIMIT);
+
+      // Salary from the job details panel
+      const salaryEl  = document.querySelector('#salaryInfoAndJobType span');
+      const salaryTxt = salaryEl?.textContent?.trim() || '';
+
+      const workType  = detectWorkType(jobLocation + ' ' + rawText);
+      const salary    = extractIndeedSalary(salaryTxt) || extractIndeedSalary(rawText);
+      const experience = extractExperience(title + ' ' + rawText);
+
+      return { jobId, title, company, location: jobLocation, workType, salary, experience, rawText };
+    } catch (_) {
+      return { jobId: '', title: '', company: '', location: '', workType: null, salary: null, experience: null, rawText: '' };
+    }
+  }
+
   // ── Exports ────────────────────────────────────────────────────────────────
-  window.TITLE_SELECTORS       = TITLE_SELECTORS;
-  window.findAllJobCards        = findAllJobCards;
-  window.findJobCardsIn         = findJobCardsIn;
-  window.extractJobData         = extractJobData;
-  window.isDetailPage           = isDetailPage;
-  window.extractDetailPageData  = extractDetailPageData;
+  window.TITLE_SELECTORS          = TITLE_SELECTORS;
+  window.findAllJobCards           = findAllJobCards;
+  window.findJobCardsIn            = findJobCardsIn;
+  window.extractJobData            = extractJobData;
+  window.isDetailPage              = isDetailPage;
+  window.extractDetailPageData     = extractDetailPageData;
+  // Indeed
+  window.isIndeedPage              = isIndeedPage;
+  window.isIndeedSearchPage        = isIndeedSearchPage;
+  window.isIndeedDirectViewPage    = isIndeedDirectViewPage;
+  window.findAllIndeedCards        = findAllIndeedCards;
+  window.findIndeedCardsIn         = findIndeedCardsIn;
+  window.extractIndeedJobData      = extractIndeedJobData;
+  window.extractIndeedDetailData   = extractIndeedDetailData;
 
 }());

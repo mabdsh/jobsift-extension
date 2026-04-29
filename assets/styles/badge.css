@@ -561,3 +561,226 @@
   margin-bottom: 16px;
 }
  
+
+/* ── Badge slot inside Indeed's ctaContainer ─────────────────────────────── */
+/* Sits before the bookmark button. Indeed's ctaContainer is relatively or    */
+/* absolutely positioned — the slot uses flex alignment to match.             */
+.js-badge-slot--indeed {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 6px;
+  flex-shrink: 0;
+}
+
+/* ── Indeed filter bar ────────────────────────────────────────────────────── */
+/* Same visual design as the LinkedIn filter bar (#js-filter-bar) but        */
+/* scoped to #js-indeed-filter-bar for DOM isolation.                         */
+#js-indeed-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  margin-bottom: 12px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  flex-wrap: wrap;
+}
+
+/* Reuse all .js-fb-* rules — they're already in badge.css and apply here    */
+/* because the filter bar uses the same class names for brand, buttons, etc. */
+
+/* ── Indeed detail banner adjustments ────────────────────────────────────── */
+/* The LinkedIn banner styles (.js-detail-banner, .js-db-*) are reused.      */
+/* These rules add Indeed-specific overrides where the layout needs tweaking. */
+
+.js-detail-banner--indeed {
+  /* Indeed's right pane has a white background and 16px padding.             */
+  /* Add a bottom margin to separate the banner from the job title heading.   */
+  margin-bottom: 12px;
+  border-radius: 8px;
+}
+
+/* ── Indeed panel anchor ──────────────────────────────────────────────────── */
+/* The panel on Indeed is anchored to the cardOutline div (not an li).        */
+/* Make it position:relative so the absolute-positioned panel renders inside. */
+div.cardOutline {
+  position: relative;
+}
+
+/* ── Indeed detail panel root ─────────────────────────────────────────────── */
+#js-indeed-detail-panel-root {
+  width: 100%;
+  position: relative;
+  margin-bottom: 16px;
+}
+
+/* ── Indeed card base ─────────────────────────────────────────────────────── */
+div.cardOutline {
+  position: relative !important;
+  padding-bottom: 4px;
+}
+
+/* ── Floating badge — bottom-right of each card ───────────────────────────── */
+/* Sits in its own space, completely separate from Indeed's ctaContainer.      */
+.js-badge--indeed-float {
+  position: absolute !important;
+  bottom: 10px;
+  right: 12px;
+  display: inline-flex !important;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px 4px 7px;
+  border-radius: 20px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  user-select: none;
+  z-index: 10;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.06);
+  transition: transform 0.15s, box-shadow 0.15s;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #fff;
+}
+.js-badge--indeed-float:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.08);
+}
+
+.js-badge--indeed-float.js-badge--green  { background:#f0fdf4; border:1px solid #bbf7d0; color:#15803d; }
+.js-badge--indeed-float.js-badge--amber  { background:#fffbeb; border:1px solid #fde68a; color:#92400e; }
+.js-badge--indeed-float.js-badge--red    { background:#fef2f2; border:1px solid #fecaca; color:#991b1b; }
+.js-badge--indeed-float.js-badge--gray   { background:#f8fafc; border:1px solid #e2e8f0; color:#475569; }
+.js-badge--indeed-float.js-badge--loading{ background:#f8fafc; border:1px solid #e2e8f0; color:#64748b; }
+
+.js-badge--indeed-float .js-badge-score {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.js-badge--indeed-float .js-dot {
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+}
+.js-badge--indeed-float.js-badge--loading .js-badge-dots {
+  display: inline-flex;
+  gap: 2px;
+  align-items: center;
+}
+.js-badge--indeed-float.js-badge--loading .js-badge-dots span {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #94a3b8;
+  animation: js-dot-bounce 1.2s ease-in-out infinite;
+}
+.js-badge--indeed-float.js-badge--loading .js-badge-dots span:nth-child(2) { animation-delay: 0.15s; }
+.js-badge--indeed-float.js-badge--loading .js-badge-dots span:nth-child(3) { animation-delay: 0.30s; }
+
+/* ── Indeed filter bar — premium design ───────────────────────────────────── */
+#js-indeed-filter-bar {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  padding: 0;
+  background: #fff;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 12px;
+  margin-bottom: 14px;
+  margin-top: 4px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  overflow: hidden;
+}
+#js-indeed-filter-bar .js-fb-brand {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 14px;
+  background: linear-gradient(135deg, #0f1c5c, #1a2f8a);
+  flex-shrink: 0;
+}
+#js-indeed-filter-bar .js-fb-brand span {
+  font-size: 11px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+#js-indeed-filter-bar .js-fb-divider {
+  width: 1px;
+  background: #e5e7eb;
+  flex-shrink: 0;
+}
+#js-indeed-filter-bar .js-fb-btns {
+  display: flex;
+  align-items: center;
+  padding: 5px 8px;
+  gap: 4px;
+  flex: 1;
+}
+#js-indeed-filter-bar .js-fb-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  border: 1.5px solid transparent;
+  border-radius: 20px;
+  background: transparent;
+  color: #374151;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+#js-indeed-filter-bar .js-fb-btn:hover          { background:#f3f4f6; border-color:#d1d5db; }
+#js-indeed-filter-bar .js-fb-btn--active        { background:#f0f4ff; border-color:#c7d2fe; color:#3730a3; }
+#js-indeed-filter-bar .js-fb-btn--green         { color:#166534; }
+#js-indeed-filter-bar .js-fb-btn--green:hover   { background:#f0fdf4; border-color:#bbf7d0; }
+#js-indeed-filter-bar .js-fb-btn--green.js-fb-btn--active  { background:#dcfce7; border-color:#86efac; color:#166534; }
+#js-indeed-filter-bar .js-fb-btn--amber         { color:#92400e; }
+#js-indeed-filter-bar .js-fb-btn--amber:hover   { background:#fffbeb; border-color:#fde68a; }
+#js-indeed-filter-bar .js-fb-btn--amber.js-fb-btn--active  { background:#fef9c3; border-color:#fde047; color:#854d0e; }
+#js-indeed-filter-bar .js-fb-btn--red           { color:#991b1b; }
+#js-indeed-filter-bar .js-fb-btn--red:hover     { background:#fef2f2; border-color:#fecaca; }
+#js-indeed-filter-bar .js-fb-btn--red.js-fb-btn--active    { background:#fee2e2; border-color:#fca5a5; color:#991b1b; }
+#js-indeed-filter-bar .js-fb-n {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 10px;
+  background: rgba(0,0,0,0.07);
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1;
+}
+#js-indeed-filter-bar .js-fb-status {
+  font-size: 11px;
+  color: #6b7280;
+  padding-right: 12px;
+  font-style: italic;
+  margin-left: auto;
+  align-self: center;
+}
+
+/* ── Indeed detail banner ─────────────────────────────────────────────────── */
+.js-detail-banner--indeed {
+  margin: 0 0 14px 0;
+  border-radius: 10px;
+}
+
+/* ── Indeed detail panel root ─────────────────────────────────────────────── */
+#js-indeed-detail-panel-root {
+  width: 100%;
+  position: relative;
+  margin-bottom: 16px;
+}

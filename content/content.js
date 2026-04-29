@@ -1,7 +1,7 @@
-// JobSift Content v2.4.0
-// v2.4.0: LinkedIn job detail page support — auto-scores /jobs/view/ URLs,
-//         injects banner above "About the job" section, panel on demand.
-// v2.3.0: fix SPA navigation — badges now appear when clicking Jobs tab from any LinkedIn page
+// JobSift Content v2.5.0
+// v2.5.0: Indeed support — badges on search cards, banner on right pane + /viewjob.
+// v2.4.0: LinkedIn job detail page support — auto-scores /jobs/view/ URLs.
+// v2.3.0: fix SPA navigation — badges now appear when clicking Jobs tab.
 // v2.2.0: score cache in chrome.storage.local + filter reset on navigation/reprocess
 
 (function () {
@@ -9,14 +9,16 @@
   if (window._jsContent) return;
   window._jsContent = true;
 
-  let _prefs             = null;
-  let _initDone          = false;
-  let _batchTimer        = null;
-  let _pollTimers        = [];
-  let _navObserver       = null;
-  let _detailProcessing  = false;
-  let _continuousScanner = null;   // safety-net scanner for SPA navigation timing gaps
-  let _lastPathname      = location.pathname; // tracks pathname separately from full href
+  let _prefs                = null;
+  let _initDone             = false;
+  let _batchTimer           = null;
+  let _pollTimers           = [];
+  let _navObserver          = null;
+  let _detailProcessing     = false;
+  let _indeedRightPaneProcessing = false;
+  let _continuousScanner    = null;
+  let _lastPathname         = location.pathname;
+  let _lastIndeedJk         = new URLSearchParams(location.search).get('jk') || '';
 
   const _store = new Map();
 
@@ -26,16 +28,36 @@
   }
 
   // ── Page type detection ────────────────────────────────────────────────────
-  // isDetailPage() takes priority — detail URLs start with /jobs so both return
-  // true for /jobs/view/, but the more specific check is checked first everywhere.
 
+  function isIndeedPage() {
+    return location.hostname.includes('indeed.com');
+  }
+
+  // LinkedIn /jobs/view/... OR Indeed /viewjob
   function isDetailPage() {
+    if (isIndeedPage()) return location.pathname === '/viewjob';
     return /\/jobs\/view\/\d+/.test(location.pathname);
   }
 
+  // Any LinkedIn jobs page OR any Indeed page that has job cards.
+  // For Indeed, delegates to window.isIndeedSearchPage (defined in scraper.js)
+  // which uses a DOM-based fallback to catch the homepage feed, recommendation
+  // pages, and any other path that renders #mosaic-provider-jobcards.
   function isJobsPage() {
+    if (isIndeedPage()) {
+      // Direct view page is handled by isDetailPage() — exclude it here
+      if (location.pathname === '/viewjob') return true;
+      // Delegate to scraper.js which has the DOM-based catch-all
+      if (typeof window.isIndeedSearchPage === 'function') {
+        return window.isIndeedSearchPage();
+      }
+      // Fallback if scraper hasn't loaded yet
+      const p = location.pathname;
+      return p === '/jobs' || p.startsWith('/jobs') || /\/q-.*-jobs/.test(p);
+    }
     const p = location.pathname;
-    return p.startsWith('/jobs') || p.includes('/collections/') || p.startsWith('/search/results/jobs');
+    return p.startsWith('/jobs') || p.includes('/collections/') ||
+           p.startsWith('/search/results/jobs');
   }
 
   // ── Score cache ────────────────────────────────────────────────────────────
@@ -92,6 +114,13 @@
 
   // ── Search page: Phase 1 — inject loading badges ───────────────────────────
   function showLoadingBadges() {
+    if (isIndeedPage()) {
+      const cards = (window.findAllIndeedCards?.() || []).filter(c =>
+        !c.dataset.jsDone && !c.dataset.jsProcessing
+      );
+      cards.forEach(card => window.injectIndeedLoadingBadge?.(card));
+      return cards;
+    }
     const cards = window.findAllJobCards().filter(c => {
       const li = c.closest('li') || c;
       return !li.dataset.jsDone && !li.dataset.jsProcessing;
@@ -104,16 +133,20 @@
   async function batchScore(cards) {
     if (!cards.length) return;
 
-    const profile     = _prefs?.profile || {};
-    const profileHash = _profileHash(profile);
-    const hasProfile  = !!(
+    const onIndeed     = isIndeedPage();
+    const profile      = _prefs?.profile || {};
+    const profileHash  = _profileHash(profile);
+    const hasProfile   = !!(
       profile.mustHaveSkills?.length ||
       profile.primarySkills?.length  ||
       profile.targetRoles?.length
     );
 
+    // Extract job data using the right scraper per platform
     const jobs = cards.map(card => {
-      const jobData = window.extractJobData(card);
+      const jobData = onIndeed
+        ? (window.extractIndeedJobData?.(card) || {})
+        : window.extractJobData(card);
       if (jobData.jobId) _store.set(jobData.jobId, { jobData });
       return jobData;
     });
@@ -124,27 +157,30 @@
     const uncachedJobs  = [];
 
     cards.forEach((card, i) => {
-      const li      = card.closest('li') || card;
+      // On Indeed the card div is the anchor; on LinkedIn it's the li
+      const anchor  = onIndeed ? card : (card.closest('li') || card);
       const jobData = jobs[i];
       const entry   = jobData.jobId ? scoreCache[jobData.jobId] : null;
 
       if (_isValidCacheEntry(entry, profileHash)) {
-        cachedItems.push({ jobData, li, result: entry.result });
+        cachedItems.push({ jobData, anchor, result: entry.result });
       } else {
         uncachedCards.push(card);
         uncachedJobs.push(jobData);
       }
     });
 
-    cachedItems.forEach(({ jobData, li, result }) => {
+    cachedItems.forEach(({ jobData, anchor, result }) => {
       if (jobData.jobId) _store.set(jobData.jobId, { jobData, result });
-      window.updateBadgeWithResult(li, result, jobData);
+      if (onIndeed) {
+        window.updateIndeedBadgeWithResult?.(anchor, result, jobData);
+      } else {
+        window.updateBadgeWithResult(anchor, result, jobData);
+      }
     });
 
     if (!uncachedCards.length) {
-      window.injectFilterBar();
-      window.refreshFilterBar();
-      updateExtensionBadge();
+      _finishBatch(onIndeed);
       return;
     }
 
@@ -178,7 +214,7 @@
     const newCacheEntries = {};
 
     uncachedCards.forEach((card, i) => {
-      const li      = card.closest('li') || card;
+      const anchor  = onIndeed ? card : (card.closest('li') || card);
       const jobData = uncachedJobs[i];
       const key     = jobData.jobId || `${jobData.title}|${jobData.company}`;
       const rules   = ruleResults.get(key) || {};
@@ -193,7 +229,8 @@
           verdict:      rules.verdict || '',
         };
         if (jobData.jobId) _store.set(jobData.jobId, { jobData, result });
-        window.updateBadgeWithResult(li, result, jobData);
+        if (onIndeed) window.updateIndeedBadgeWithResult?.(anchor, result, jobData);
+        else          window.updateBadgeWithResult(anchor, result, jobData);
         return;
       }
 
@@ -230,7 +267,8 @@
         }
       }
 
-      window.updateBadgeWithResult(li, result, jobData);
+      if (onIndeed) window.updateIndeedBadgeWithResult?.(anchor, result, jobData);
+      else          window.updateBadgeWithResult(anchor, result, jobData);
     });
 
     if (Object.keys(newCacheEntries).length) {
@@ -241,8 +279,20 @@
       _saveScoreCache(updated);
     }
 
-    window.injectFilterBar();
-    window.refreshFilterBar();
+    _finishBatch(onIndeed);
+  }
+
+  // Injects/refreshes the filter bar and updates the extension badge count
+  // after a batch completes. Separate function so cached-hit early-return path
+  // also calls it without duplicating the three lines.
+  function _finishBatch(onIndeed) {
+    if (onIndeed) {
+      window.injectIndeedFilterBar?.();
+      window.refreshIndeedFilterBar?.();
+    } else {
+      window.injectFilterBar();
+      window.refreshFilterBar();
+    }
     updateExtensionBadge();
   }
 
@@ -373,6 +423,147 @@
     }
   };
 
+  // ── Indeed: right-pane MutationObserver ────────────────────────────────────
+  // On some Indeed pages (homepage job feed, recommendation pages), clicking a
+  // card does NOT change the URL — Indeed's own JS loads the right pane via AJAX
+  // while the URL stays the same. Our URL watcher misses this entirely.
+  //
+  // The fix: watch for content changes inside the right-pane container.
+  // `section#job-full-details` → `div#vjs-container` is the stable container
+  // that Indeed uses for the right-pane job detail view across all page types.
+  // When the job title element changes (new job loaded), we trigger scoring.
+
+  let _indeedPaneObserver    = null;
+  let _lastIndeedPaneTitle   = '';
+  let _indeedPaneSetupTimer  = null;
+
+  function setupIndeedRightPaneObserver() {
+    if (_indeedPaneObserver) return;
+
+    // Poll until the right-pane container exists — it may not be in the initial DOM
+    _indeedPaneSetupTimer = setInterval(() => {
+      const pane = document.querySelector('section#job-full-details, #vjs-container');
+      if (!pane) return;
+      clearInterval(_indeedPaneSetupTimer);
+      _indeedPaneSetupTimer = null;
+
+      _indeedPaneObserver = new MutationObserver(() => {
+        // Read the current job title from the right pane — stable selector
+        const titleEl = document.querySelector(
+          '#vjs-container h2.jobsearch-JobInfoHeader-title span:first-child, ' +
+          'section#job-full-details h2.jobsearch-JobInfoHeader-title span:first-child'
+        );
+        const currentTitle = titleEl?.textContent?.trim() || '';
+        if (!currentTitle || currentTitle === _lastIndeedPaneTitle) return;
+
+        _lastIndeedPaneTitle = currentTitle;
+        // Debounce — mutations fire multiple times during a single pane load
+        clearTimeout(window._indeedPaneTrigger);
+        window._indeedPaneTrigger = setTimeout(() => {
+          handleIndeedRightPane();
+        }, 400);
+      });
+
+      _indeedPaneObserver.observe(pane, { childList: true, subtree: true });
+    }, 600);
+  }
+
+  function disconnectIndeedRightPaneObserver() {
+    if (_indeedPaneSetupTimer) { clearInterval(_indeedPaneSetupTimer); _indeedPaneSetupTimer = null; }
+    if (_indeedPaneObserver)   { _indeedPaneObserver.disconnect(); _indeedPaneObserver = null; }
+    _lastIndeedPaneTitle = '';
+  }
+  // then runs the same two-phase scoring flow as LinkedIn's detail page:
+  //   Phase 1: rule-based score → banner updates immediately
+  //   Phase 2: AI score → banner updates with better accuracy
+  async function waitForIndeedDetailDOM() {
+    for (let i = 0; i < 20; i++) {
+      const el = document.querySelector(
+        '#jobsearch-ViewjobPaneWrapper div.jobsearch-HeaderContainer, ' +
+        'div.jobsearch-JobComponent div.jobsearch-HeaderContainer'
+      );
+      if (el) return el;
+      await new Promise(r => setTimeout(r, 250));
+    }
+    return null;
+  }
+
+  async function handleIndeedRightPane() {
+    if (_indeedRightPaneProcessing) return;
+    _indeedRightPaneProcessing = true;
+
+    try {
+      const headerEl = await waitForIndeedDetailDOM();
+      if (!headerEl) return;
+
+      window.injectIndeedDetailBanner?.();
+
+      const jobData = window.extractIndeedDetailData?.();
+      if (!jobData?.title) { window.removeIndeedDetailBanner?.(); return; }
+
+      const profile     = _prefs?.profile || {};
+      const profileHash = _profileHash(profile);
+      const hasProfile  = !!(
+        profile.mustHaveSkills?.length ||
+        profile.primarySkills?.length  ||
+        profile.targetRoles?.length
+      );
+
+      // Cache check
+      if (jobData.jobId) {
+        const scoreCache = await _loadScoreCache();
+        const entry      = scoreCache[jobData.jobId];
+        if (_isValidCacheEntry(entry, profileHash)) {
+          window.updateIndeedDetailBanner?.(entry.result, jobData);
+          return;
+        }
+      }
+
+      // Phase 2a: rule-based (instant)
+      const ruleResult = window.scoreJob(jobData, profile);
+      window.updateIndeedDetailBanner?.(ruleResult, jobData);
+
+      // Phase 2b: AI score
+      if (hasProfile) {
+        try {
+          const res = await chrome.runtime.sendMessage({
+            type:    'JS_BATCH_SCORE',
+            profile,
+            jobs:    [jobData],
+          });
+          if (res.ok && res.results?.length) {
+            const ai = res.results[0];
+            const result = {
+              score:           ai.score,
+              label:           ai.label,
+              text:            ai.text,
+              verdict:         ai.verdict,
+              criteria:        ruleResult.criteria        || [],
+              tips:            ruleResult.tips            || [],
+              recommendation:  ruleResult.recommendation  || null,
+              missingCritical: ruleResult.missingCritical || [],
+              warnings:        ruleResult.warnings        || [],
+              confidence:      ruleResult.confidence      || 1,
+              metCount:        ruleResult.metCount        || 0,
+              total:           ruleResult.total           || 0,
+            };
+            window.updateIndeedDetailBanner?.(result, jobData);
+            if (result.score !== null && jobData.jobId) {
+              const scoreCache = await _loadScoreCache();
+              const updated    = _pruneCache(
+                { ...scoreCache, [jobData.jobId]: { result, timestamp: Date.now(), profileHash } },
+                profileHash
+              );
+              _saveScoreCache(updated);
+            }
+          }
+        } catch (_) {}
+      }
+    } finally {
+      _indeedRightPaneProcessing = false;
+    }
+  }
+
   function updateExtensionBadge() {
     const green = document.querySelectorAll('.js-badge--green').length;
     chrome.runtime.sendMessage({ type: 'SET_BADGE', count: green }).catch(() => {});
@@ -386,12 +577,20 @@
   function startContinuousScanning() {
     stopContinuousScanning();
     if (!isJobsPage() || isDetailPage()) return;
+    const onIndeed = isIndeedPage();
     _continuousScanner = setInterval(() => {
       if (!isJobsPage() || isDetailPage()) return;
-      const unscored = (window.findAllJobCards?.() || []).filter(c => {
-        const li = c.closest('li') || c;
-        return !li.dataset.jsDone && !li.dataset.jsProcessing && !li.querySelector('.js-badge');
-      });
+      let unscored;
+      if (onIndeed) {
+        unscored = (window.findAllIndeedCards?.() || []).filter(c =>
+          !c.dataset.jsDone && !c.dataset.jsProcessing && !c.querySelector('.js-badge')
+        );
+      } else {
+        unscored = (window.findAllJobCards?.() || []).filter(c => {
+          const li = c.closest('li') || c;
+          return !li.dataset.jsDone && !li.dataset.jsProcessing && !li.querySelector('.js-badge');
+        });
+      }
       if (unscored.length > 0) scheduleBatch();
     }, 2000);
   }
@@ -412,29 +611,47 @@
 
   function startObserver() {
     if (!isJobsPage() || isDetailPage()) return;
-    window.setupObserver(() => scheduleBatch(), window.findJobCardsIn);
+    // Use the platform-appropriate card finder for the MutationObserver
+    const finder = isIndeedPage()
+      ? window.findIndeedCardsIn
+      : window.findJobCardsIn;
+    window.setupObserver(() => scheduleBatch(), finder);
+    // Also watch the Indeed right pane for content changes that don't trigger URL changes
+    if (isIndeedPage()) setupIndeedRightPaneObserver();
   }
 
   // ── Reprocess (profile change) ─────────────────────────────────────────────
   function reprocessAll() {
     window.disconnectObserver?.();
     stopContinuousScanning();
+    disconnectIndeedRightPaneObserver();
 
-    document.querySelectorAll('.js-badge, .js-panel, #js-filter-bar').forEach(el => el.remove());
+    // Remove all injected JobSift elements on both platforms
+    document.querySelectorAll(
+      '.js-badge, .js-panel, #js-filter-bar, #js-indeed-filter-bar'
+    ).forEach(el => el.remove());
     document.querySelectorAll('[data-js-done],[data-js-processing]').forEach(el => {
       delete el.dataset.jsDone;
       delete el.dataset.jsProcessing;
     });
     window.hidePanel?.();
-    window.resetFilter?.();
-    window.removeDetailBanner?.();
+
+    if (isIndeedPage()) {
+      window.resetIndeedFilter?.();
+      window.removeIndeedDetailBanner?.();
+    } else {
+      window.resetFilter?.();
+      window.removeDetailBanner?.();
+    }
 
     _store.clear();
-    _detailProcessing = false;
+    _detailProcessing          = false;
+    _indeedRightPaneProcessing = false;
     chrome.runtime.sendMessage({ type: 'SET_BADGE', count: 0 }).catch(() => {});
 
     if (isDetailPage()) {
-      handleDetailPage();
+      if (isIndeedPage()) handleIndeedRightPane();
+      else                handleDetailPage();
     } else if (isJobsPage()) {
       startPolling();
       startObserver();
@@ -485,40 +702,54 @@
       if (location.href === _lastUrl) return;
       _lastUrl = location.href;
 
-      const newPathname      = location.pathname;
-      const pathnameChanged  = newPathname !== _lastPathname;
-      _lastPathname          = newPathname;
+      const newPathname     = location.pathname;
+      const pathnameChanged = newPathname !== _lastPathname;
+      _lastPathname         = newPathname;
 
       if (pathnameChanged) {
-        // Full reset — we're on a genuinely different page
+        // Full reset — genuinely different page
         document.querySelectorAll('[data-js-done],[data-js-processing]').forEach(el => {
           delete el.dataset.jsDone;
           delete el.dataset.jsProcessing;
         });
-        window.resetFilter?.();
-        window.removeDetailBanner?.();
+        if (isIndeedPage()) {
+          window.resetIndeedFilter?.();
+          window.removeIndeedDetailBanner?.();
+          _indeedRightPaneProcessing = false;
+        } else {
+          window.resetFilter?.();
+          window.removeDetailBanner?.();
+        }
         _detailProcessing = false;
       }
-      // Query-param-only change (e.g. currentJobId): skip reset entirely.
-      // The card list hasn't changed — only the right-pane detail changed.
 
       if (isDetailPage()) {
-        if (pathnameChanged) setTimeout(() => handleDetailPage(), 300);
+        // LinkedIn /jobs/view/ or Indeed /viewjob (pathname change)
+        if (pathnameChanged) {
+          if (isIndeedPage()) setTimeout(() => handleIndeedRightPane(), 300);
+          else                setTimeout(() => handleDetailPage(), 300);
+        }
       } else if (isJobsPage()) {
         if (pathnameChanged) {
-          // Start fresh observer and continuous scanner for the new page
           startObserver();
           stopContinuousScanning();
           startContinuousScanning();
           startPolling();
+        } else if (isIndeedPage()) {
+          // Query-param change on Indeed — check if a card was clicked (jk changed)
+          const newJk = new URLSearchParams(location.search).get('jk') || '';
+          if (newJk && newJk !== _lastIndeedJk) {
+            _lastIndeedJk = newJk;
+            // Small delay lets the right pane start rendering before we scan it
+            setTimeout(() => handleIndeedRightPane(), 400);
+          }
         }
-        // Always run a batch scan — catches cards on both pathname changes and
-        // the edge case where currentJobId change coincides with new cards
-        // appearing (e.g. infinite scroll loading while changing cards)
+        // Always scan for any new unscored cards (including after card click on either platform)
         scheduleBatch();
       } else {
         // Navigated away from jobs entirely
         stopContinuousScanning();
+        disconnectIndeedRightPaneObserver();
         window.disconnectObserver?.();
         chrome.runtime.sendMessage({ type: 'SET_BADGE', count: 0 }).catch(() => {});
       }
@@ -535,11 +766,17 @@
     watchNavigation();
 
     if (isDetailPage()) {
-      handleDetailPage();
+      // LinkedIn /jobs/view/ direct load OR Indeed /viewjob direct load
+      if (isIndeedPage()) handleIndeedRightPane();
+      else                handleDetailPage();
     } else if (isJobsPage()) {
       startPolling();
-      startObserver();
+      startObserver();           // also starts setupIndeedRightPaneObserver if on Indeed
       startContinuousScanning();
+      // Indeed: if page loaded with ?jk= already set, score the right pane
+      if (isIndeedPage() && _lastIndeedJk) {
+        setTimeout(() => handleIndeedRightPane(), 600);
+      }
     }
   }
 

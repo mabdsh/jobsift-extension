@@ -1,4 +1,5 @@
-// JobSift Observer v2.0.0
+// JobSift Observer v2.1.0
+// v2.1.0: Indeed card detection — cardOutline + data-jk in fallback and card-done check
 
 (function () {
   'use strict';
@@ -17,8 +18,12 @@
           const gather = cardFinder
             || (typeof window.findJobCardsIn === 'function' ? window.findJobCardsIn : _fallback);
           gather(node).forEach(card => {
-            const li = card.closest('li') || card;
-            if (!li.dataset.jsDone && !li.dataset.jsProcessing) toProcess.add(card);
+            // For LinkedIn cards the anchor is li; for Indeed cards it's the cardOutline div.
+            // Check data-js-done on whichever element is the canonical anchor.
+            const anchor = card.classList?.contains('cardOutline')
+              ? card
+              : (card.closest('li') || card);
+            if (!anchor.dataset.jsDone && !anchor.dataset.jsProcessing) toProcess.add(card);
           });
         }
       }
@@ -35,8 +40,18 @@
 
   function _fallback(node) {
     const found = new Set();
+    // LinkedIn cards
     ['li[data-occludable-job-id]','li[data-job-id]','li.occludable-update','li.artdeco-list__item']
       .forEach(sel => { try { node.querySelectorAll?.(sel).forEach(el=>found.add(el)); } catch(_){} });
+    // Indeed cards — cardOutline is a stable class, data-jk is a stable attribute
+    try {
+      node.querySelectorAll?.('div.cardOutline').forEach(el => {
+        if (el.querySelector('a[data-jk]') &&
+            el.getAttribute('aria-hidden') !== 'true') {
+          found.add(el);
+        }
+      });
+    } catch(_) {}
     return Array.from(found);
   }
 
