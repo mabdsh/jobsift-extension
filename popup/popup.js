@@ -39,6 +39,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   setupUpgradeUI();
   initSubscriptionUI();
+  setupTabs();
+  loadTrackerTabCount();
 
   // ── First-run detection ─────────────────────────────────────────────────────
   // A new user has an empty profile: no skills, no roles, no current title,
@@ -512,4 +514,337 @@ function setupUpgradeUI() {
       if (restoreBtn) { restoreBtn.disabled = false; restoreBtn.textContent = 'Restore'; }
     });
   });
+}
+
+// ── Job Tracker ────────────────────────────────────────────────────────────────
+// All tracker state lives in chrome.storage.local under 'jobsift_tracker'.
+// popup.js reads/writes storage directly — no content script bridge needed
+// since the popup runs in its own isolated extension page context.
+
+const TRACKER_KEY    = 'jobsift_tracker';
+let   _trackerFilter = 'all';
+
+// ── Storage helpers ────────────────────────────────────────────────────────────
+function loadTrackerData() {
+  return new Promise(r =>
+    chrome.storage.local.get(TRACKER_KEY, d => r(d[TRACKER_KEY] || {}))
+  );
+}
+
+function saveTrackerData(data) {
+  return new Promise(r =>
+    chrome.storage.local.set({ [TRACKER_KEY]: data }, r)
+  );
+}
+
+// ── Tab bar ────────────────────────────────────────────────────────────────────
+function setupTabs() {
+  const tabBtns = document.querySelectorAll('.tab-btn');
+
+  tabBtns.forEach(btn => {
+    btn.addEventListener('click', async () => {
+      tabBtns.forEach(b => {
+        b.classList.remove('tab-btn--active');
+        b.setAttribute('aria-selected', 'false');
+      });
+      btn.classList.add('tab-btn--active');
+      btn.setAttribute('aria-selected', 'true');
+
+      const tab         = btn.dataset.tab;
+      const mainContent = document.getElementById('mainContent');
+      const onboarding  = document.getElementById('onboarding');
+      const trackerPane = document.getElementById('trackerPane');
+
+      if (tab === 'tracker') {
+        if (mainContent) mainContent.style.display = 'none';
+        if (onboarding && onboarding.style.display !== 'none') onboarding.style.display = 'none';
+        if (trackerPane) trackerPane.style.display = 'flex';
+        await renderTracker();
+      } else {
+        if (trackerPane) trackerPane.style.display = 'none';
+        // Restore whichever view was active before
+        const wasOnboarding = document.getElementById('onboarding')?.dataset.wasActive === 'true';
+        if (mainContent) mainContent.style.display = 'contents';
+      }
+    });
+  });
+
+  // Filter pill clicks
+  document.getElementById('tkFilters')?.addEventListener('click', async e => {
+    const btn = e.target.closest('.tk-filter-btn');
+    if (!btn) return;
+    document.querySelectorAll('.tk-filter-btn').forEach(b => b.classList.remove('tk-filter--active'));
+    btn.classList.add('tk-filter--active');
+    _trackerFilter = btn.dataset.filter;
+    await renderTracker();
+  });
+
+  // Close portal dropdown on outside click
+  document.addEventListener('click', e => {
+    if (!e.target.closest('#tk-dropdown-portal') && !e.target.closest('.tk-status-pill')) {
+      closePortalDropdown();
+    }
+  });
+}
+
+// ── Portal dropdown ────────────────────────────────────────────────────────────
+// Rendered at document.body with position:fixed — escapes both overflow:hidden
+// on .tk-card and overflow-y:auto on .tk-list which would clip inline dropdowns.
+
+let _portalJobId     = null;
+let _portalCurStatus = null;
+
+function getOrCreatePortalDropdown() {
+  let dd = document.getElementById('tk-dropdown-portal');
+  if (!dd) {
+    dd = document.createElement('div');
+    dd.id        = 'tk-dropdown-portal';
+    dd.className = 'tk-status-dropdown';
+    dd.style.cssText = 'display:none; position:fixed; z-index:9999;';
+    document.body.appendChild(dd);
+
+    // Delegated listener — one handler for all option clicks
+    dd.addEventListener('click', async e => {
+      const opt = e.target.closest('.tk-status-opt');
+      if (!opt) return;
+      const newStatus = opt.dataset.value;
+      const jobId     = _portalJobId;
+      closePortalDropdown();
+      if (!jobId || !newStatus) return;
+      const data = await loadTrackerData();
+      if (data[jobId]) {
+        data[jobId].status    = newStatus;
+        data[jobId].updatedAt = Date.now();
+        await saveTrackerData(data);
+      }
+      await renderTracker();
+    });
+  }
+  return dd;
+}
+
+function openPortalDropdown(pill, jobId, currentStatus) {
+  const dd = getOrCreatePortalDropdown();
+
+  // Toggle: click same pill again to close
+  if (_portalJobId === jobId && dd.style.display !== 'none') {
+    closePortalDropdown();
+    return;
+  }
+
+  _portalJobId     = jobId;
+  _portalCurStatus = currentStatus;
+
+  // Populate with all statuses except the current one
+  dd.innerHTML = Object.entries(STATUS_META)
+    .filter(([val]) => val !== currentStatus)
+    .map(([val, m]) =>
+      `<button class="tk-status-opt" data-value="${val}" type="button">
+         ${m.icon} ${m.label}
+       </button>`
+    ).join('');
+
+  // Position below (or above if near the bottom of the viewport)
+  const rect        = pill.getBoundingClientRect();
+  dd.style.left     = `${Math.round(rect.left)}px`;
+  dd.style.minWidth = `${Math.round(rect.width)}px`;
+
+  const spaceBelow = window.innerHeight - rect.bottom;
+  if (spaceBelow < 150) {
+    dd.style.top    = 'auto';
+    dd.style.bottom = `${Math.round(window.innerHeight - rect.top + 4)}px`;
+  } else {
+    dd.style.bottom = 'auto';
+    dd.style.top    = `${Math.round(rect.bottom + 4)}px`;
+  }
+
+  dd.style.display = 'block';
+}
+
+function closePortalDropdown() {
+  const dd = document.getElementById('tk-dropdown-portal');
+  if (dd) dd.style.display = 'none';
+  _portalJobId     = null;
+  _portalCurStatus = null;
+}
+
+// ── Tracker count in tab label ─────────────────────────────────────────────────
+async function loadTrackerTabCount() {
+  const data    = await loadTrackerData();
+  const count   = Object.keys(data).length;
+  const countEl = document.getElementById('trackerTabCount');
+  if (countEl) countEl.textContent = count > 0 ? count : '';
+}
+
+// ── Main render ────────────────────────────────────────────────────────────────
+async function renderTracker() {
+  const data    = await loadTrackerData();
+  const entries = Object.values(data).sort((a, b) => b.savedAt - a.savedAt);
+
+  // Counts per status
+  const counts = { all: entries.length, saved: 0, applied: 0, interview: 0, rejected: 0 };
+  entries.forEach(e => { if (counts[e.status] !== undefined) counts[e.status]++; });
+
+  // Update filter pill counts
+  ['all','saved','applied','interview','rejected'].forEach(k => {
+    const el = document.getElementById(`tkc-${k}`);
+    if (el) el.textContent = counts[k];
+  });
+
+  // Update tab badge
+  const tabCount = document.getElementById('trackerTabCount');
+  if (tabCount) tabCount.textContent = counts.all > 0 ? counts.all : '';
+
+  // Filter
+  const filtered = _trackerFilter === 'all'
+    ? entries
+    : entries.filter(e => e.status === _trackerFilter);
+
+  const list = document.getElementById('tkList');
+  if (!list) return;
+
+  if (filtered.length === 0) {
+    list.innerHTML = _emptyStateHTML(counts.all === 0);
+    return;
+  }
+
+  list.innerHTML = '';
+  filtered.forEach(entry => list.appendChild(buildTrackerCard(entry)));
+}
+
+// ── Card builder ───────────────────────────────────────────────────────────────
+const STATUS_META = {
+  saved:     { label: 'Saved',     icon: '📌', cls: 'tk-status--saved'     },
+  applied:   { label: 'Applied',   icon: '📤', cls: 'tk-status--applied'   },
+  interview: { label: 'Interview', icon: '🎯', cls: 'tk-status--interview' },
+  rejected:  { label: 'Rejected',  icon: '✕',  cls: 'tk-status--rejected'  },
+};
+
+function buildTrackerCard(entry) {
+  const card = document.createElement('div');
+  card.className = 'tk-card';
+  card.dataset.jobId = entry.jobId;
+
+  const meta      = STATUS_META[entry.status] || STATUS_META.saved;
+  const hasScore  = entry.score !== null && entry.score !== undefined;
+  const scoreText = hasScore ? `${entry.score}%` : '—';
+  const platform  = entry.platform === 'indeed'
+    ? `<span class="tk-platform tk-platform--indeed">IN</span>`
+    : `<span class="tk-platform tk-platform--linkedin">Li</span>`;
+
+  card.innerHTML = `
+    <div class="tk-card-top">
+      <span class="tk-score-dot tk-score-dot--${entry.label}">${scoreText}</span>
+      <div class="tk-card-info">
+        <div class="tk-card-title">${_esc(entry.title)}</div>
+        <div class="tk-card-meta">
+          ${platform}
+          ${_esc(entry.company)}${entry.location ? ' · ' + _esc(entry.location) : ''}
+          <span class="tk-card-time">· ${_timeAgo(entry.savedAt)}</span>
+        </div>
+      </div>
+      <div class="tk-card-actions">
+        ${entry.url
+          ? `<a class="tk-icon-btn" href="${entry.url}" target="_blank"
+               rel="noopener" title="Open original posting" tabindex="0">↗</a>`
+          : ''}
+        <button class="tk-icon-btn tk-delete-btn" title="Remove" type="button">
+          <svg viewBox="0 0 16 16" fill="none" width="13" height="13">
+            <path d="M3 4h10M6 4V2h4v2M5 4v9a1 1 0 001 1h4a1 1 0 001-1V4"
+                  stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div class="tk-card-bottom">
+      <div class="tk-status-wrap">
+        <button class="tk-status-pill ${meta.cls}" type="button">
+          ${meta.icon} ${meta.label} <span class="tk-chevron">▾</span>
+        </button>
+      </div>
+    </div>`;
+
+  // Status pill → opens portal dropdown (position:fixed, appended to body)
+  const pill = card.querySelector('.tk-status-pill');
+  pill.addEventListener('click', e => {
+    e.stopPropagation();
+    openPortalDropdown(pill, entry.jobId, entry.status);
+  });
+
+  // Delete — inline confirmation
+  card.querySelector('.tk-delete-btn').addEventListener('click', e => {
+    e.stopPropagation();
+    closePortalDropdown();
+    showDeleteConfirm(card, entry.jobId);
+  });
+
+  return card;
+}
+
+// ── Inline delete confirmation ─────────────────────────────────────────────────
+function showDeleteConfirm(card, jobId) {
+  const savedHTML = card.innerHTML;
+
+  card.innerHTML = `
+    <div class="tk-confirm">
+      <span class="tk-confirm-msg">Remove this job from your tracker?</span>
+      <div class="tk-confirm-btns">
+        <button class="tk-confirm-yes" type="button">Remove</button>
+        <button class="tk-confirm-no"  type="button">Cancel</button>
+      </div>
+    </div>`;
+
+  card.querySelector('.tk-confirm-yes').addEventListener('click', async () => {
+    card.classList.add('tk-card--removing');
+    const data = await loadTrackerData();
+    delete data[jobId];
+    await saveTrackerData(data);
+    setTimeout(async () => {
+      card.remove();
+      await renderTracker();
+    }, 220);
+  });
+
+  card.querySelector('.tk-confirm-no').addEventListener('click', async () => {
+    card.innerHTML = savedHTML;
+    await renderTracker(); // easiest way to restore all event listeners
+  });
+}
+
+// ── Empty state ────────────────────────────────────────────────────────────────
+function _emptyStateHTML(noJobsAtAll) {
+  return `
+    <div class="tk-empty">
+      <div class="tk-empty-icon">📋</div>
+      <div class="tk-empty-title">
+        ${noJobsAtAll ? 'No jobs tracked yet' : 'No jobs in this stage'}
+      </div>
+      <div class="tk-empty-sub">
+        ${noJobsAtAll
+          ? 'Score jobs on LinkedIn or Indeed, then click <strong>Save</strong> in the analysis panel.'
+          : 'Change the filter above to see jobs in other stages.'}
+      </div>
+      ${noJobsAtAll ? `
+        <a class="tk-empty-cta" href="https://www.linkedin.com/jobs/" target="_blank" rel="noopener">
+          Go to LinkedIn Jobs →
+        </a>` : ''}
+    </div>`;
+}
+
+// ── Utilities ──────────────────────────────────────────────────────────────────
+function _timeAgo(ts) {
+  const s = Math.floor((Date.now() - ts) / 1000);
+  if (s < 60)                  return 'just now';
+  if (s < 3600)                return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400)               return `${Math.floor(s / 3600)}h ago`;
+  if (s < 86400 * 30)          return `${Math.floor(s / 86400)}d ago`;
+  if (s < 86400 * 365)         return `${Math.floor(s / (86400 * 30))}mo ago`;
+  return `${Math.floor(s / (86400 * 365))}yr ago`;
+}
+
+function _esc(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }

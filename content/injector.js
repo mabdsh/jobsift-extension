@@ -330,10 +330,14 @@
             : ''}
           <span class="js-db-basis">Based on full description</span>
         </div>
+        <button class="js-db-save-btn" type="button">Save</button>
         <button class="js-db-analysis-btn" type="button">
           View full analysis →
         </button>
       </div>`;
+
+    // Wire Save button
+    _wireBannerSaveBtn(banner, jobData, result);
 
     // Wire "View full analysis" button → opens the panel
     const btn = banner.querySelector('.js-db-analysis-btn');
@@ -341,8 +345,6 @@
       btn.addEventListener('click', e => {
         e.preventDefault();
         e.stopPropagation();
-        // One panel at a time — hidePanel() runs inside togglePanel() if needed.
-        // Panel is anchored to the dedicated root div immediately below the banner.
         const panelRoot = getOrCreateDetailPanelRoot();
         if (panelRoot) {
           window.togglePanel(btn, panelRoot, result, jobData);
@@ -662,10 +664,14 @@
           ${result.verdict ? `<span class="js-db-verdict">${_escBanner(result.verdict)}</span>` : ''}
           <span class="js-db-basis">Based on full description</span>
         </div>
+        <button class="js-db-save-btn" type="button">Save</button>
         <button class="js-db-analysis-btn" type="button">
           View full analysis →
         </button>
       </div>`;
+
+    // Wire Save button
+    _wireBannerSaveBtn(banner, jobData, result);
 
     const btn = banner.querySelector('.js-db-analysis-btn');
     if (btn) {
@@ -677,6 +683,39 @@
     }
 
     _indeedDetailBanner = banner;
+  }
+
+  // ── Shared banner Save-button wiring ───────────────────────────────────────
+  // Handles the "Save" button inside any detail banner (LinkedIn or Indeed).
+  // Async-checks if the job is already saved and updates the button immediately.
+  function _wireBannerSaveBtn(banner, jobData, result) {
+    const saveBtn = banner.querySelector('.js-db-save-btn');
+    if (!saveBtn) return;
+
+    // Async check — update to "✓ Saved" if job already tracked
+    if (jobData?.jobId && window.jsTracker) {
+      window.jsTracker.isJobSaved(jobData.jobId).then(saved => {
+        if (saved) _markBannerSaved(saveBtn);
+      }).catch(() => {});
+    }
+
+    saveBtn.addEventListener('click', async e => {
+      e.preventDefault(); e.stopPropagation();
+      if (saveBtn.classList.contains('js-db-save-btn--saved')) return;
+      saveBtn.disabled = true;
+      try {
+        await window.jsTracker?.saveJob(jobData, result);
+        _markBannerSaved(saveBtn);
+      } catch (_) {
+        saveBtn.disabled = false;
+      }
+    });
+  }
+
+  function _markBannerSaved(btn) {
+    btn.textContent = '✓ Saved';
+    btn.classList.add('js-db-save-btn--saved');
+    btn.disabled = false;
   }
 
   function getOrCreateIndeedDetailPanelRoot() {

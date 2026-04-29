@@ -27,6 +27,53 @@
     return `${m}m`;
   }
 
+  // ── Save-to-tracker button ─────────────────────────────────────────────────
+  // Created once per panel open. Async-checks if the job is already saved and
+  // updates the button state. Sits in the panel header next to the close button.
+  function makeSaveBtn(jobData, result) {
+    const btn = document.createElement('button');
+    btn.className = 'js-save-btn';
+    btn.setAttribute('aria-label', 'Save to tracker');
+    btn.innerHTML = `
+      <svg viewBox="0 0 16 16" fill="none" width="12" height="12">
+        <path d="M12 2H4a1 1 0 00-1 1v11l5-2.5L13 14V3a1 1 0 00-1-1z"
+              stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+      </svg>
+      <span>Save</span>`;
+
+    // Async check — update to "Saved" state if job already in tracker
+    if (jobData.jobId && window.jsTracker) {
+      window.jsTracker.isJobSaved(jobData.jobId).then(saved => {
+        if (saved) _markSaveBtnSaved(btn);
+      }).catch(() => {});
+    }
+
+    btn.addEventListener('click', async e => {
+      e.stopPropagation();
+      if (btn.classList.contains('js-save-btn--saved')) return;
+      btn.disabled = true;
+      try {
+        await window.jsTracker?.saveJob(jobData, result);
+        _markSaveBtnSaved(btn);
+      } catch (_) {
+        btn.disabled = false;
+      }
+    });
+
+    return btn;
+  }
+
+  function _markSaveBtnSaved(btn) {
+    btn.classList.add('js-save-btn--saved');
+    btn.disabled = false;
+    btn.innerHTML = `
+      <svg viewBox="0 0 16 16" fill="none" width="12" height="12">
+        <path d="M12 2H4a1 1 0 00-1 1v11l5-2.5L13 14V3a1 1 0 00-1-1z"
+              fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+      </svg>
+      <span>Saved</span>`;
+  }
+
   function makeCloseBtn() {
     const btn = document.createElement('button');
     btn.className = 'js-close-btn';
@@ -355,7 +402,7 @@
       : 'Complete your profile for a full score';
     meta.append(matchTxt, detail);
 
-    hdr.append(ring, meta, makeCloseBtn());
+    hdr.append(ring, meta, makeSaveBtn(jobData, result), makeCloseBtn());
     panel.appendChild(hdr);
 
     // 2. Verdict line

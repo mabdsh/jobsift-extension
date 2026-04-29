@@ -29,6 +29,16 @@
     <div id="statusPill" class="status-pill">Open LinkedIn Jobs</div>
   </header>
 
+  <!-- ── Tab bar ──────────────────────────────────────────────────────────── -->
+  <div class="tab-bar" id="tabBar" role="tablist">
+    <button class="tab-btn tab-btn--active" id="tabProfile"
+            data-tab="profile" role="tab" aria-selected="true">Profile</button>
+    <button class="tab-btn" id="tabTracker"
+            data-tab="tracker" role="tab" aria-selected="false">
+      Tracker<span class="tab-count" id="trackerTabCount"></span>
+    </button>
+  </div>
+
   <!-- ══════════════════════════════════════════════════════════════════════
        ONBOARDING SCREEN
        Shown only to new users (empty profile). Replaces the main content
@@ -388,6 +398,33 @@
     </footer>
 
   </div><!-- /mainContent -->
+
+  <!-- ── Tracker pane ─────────────────────────────────────────────────────── -->
+  <div id="trackerPane" class="tracker-pane" style="display:none" role="tabpanel">
+
+    <!-- Filter pills -->
+    <div class="tk-filters" id="tkFilters">
+      <button class="tk-filter-btn tk-filter--active" data-filter="all">
+        All <span class="tk-filter-count" id="tkc-all">0</span>
+      </button>
+      <button class="tk-filter-btn" data-filter="saved">
+        Saved <span class="tk-filter-count" id="tkc-saved">0</span>
+      </button>
+      <button class="tk-filter-btn" data-filter="applied">
+        Applied <span class="tk-filter-count" id="tkc-applied">0</span>
+      </button>
+      <button class="tk-filter-btn" data-filter="interview">
+        Interview <span class="tk-filter-count" id="tkc-interview">0</span>
+      </button>
+      <button class="tk-filter-btn" data-filter="rejected">
+        Rejected <span class="tk-filter-count" id="tkc-rejected">0</span>
+      </button>
+    </div>
+
+    <!-- Job list -->
+    <div class="tk-list" id="tkList"></div>
+
+  </div><!-- /trackerPane -->
 
 </div><!-- /app -->
 <script src="popup.js"></script>
