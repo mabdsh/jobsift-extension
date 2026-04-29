@@ -314,8 +314,8 @@
           <span class="js-lp-limit-name">profile parses / day</span>
         </div>
         <div class="js-lp-limit-item">
-          <span class="js-lp-limit-num">7</span>
-          <span class="js-lp-limit-name">day free trial</span>
+          <span class="js-lp-limit-num">∞</span>
+          <span class="js-lp-limit-name">job scoring</span>
         </div>
       </div>`;
     panel.appendChild(plan);

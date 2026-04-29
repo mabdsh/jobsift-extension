@@ -27,6 +27,27 @@ const DEFAULT_DATA = {
 
 // ── Install ────────────────────────────────────────────────────────────────────
 chrome.runtime.onInstalled.addListener(async ({ reason }) => {
+  // ── Configuration check ────────────────────────────────────────────────────
+  // Warn about unfilled placeholder values so misconfiguration is immediately
+  // visible in the service worker console during development and testing.
+  // This does not throw — it only logs — so users are never affected.
+  const configWarnings = [];
+  if (API_BASE_URL === 'http://localhost:3000' || API_BASE_URL.includes('YOUR_SUBDOMAIN')) {
+    configWarnings.push(`API_BASE_URL is "${API_BASE_URL}" — set to your production DuckDNS URL before publishing`);
+  }
+  if (LS_STORE_SUBDOMAIN === 'YOUR_STORE_SUBDOMAIN') {
+    configWarnings.push('LS_STORE_SUBDOMAIN is not configured — LemonSqueezy checkout will not work');
+  }
+  if (LS_VARIANT_ID === 'YOUR_VARIANT_ID') {
+    configWarnings.push('LS_VARIANT_ID is not configured — LemonSqueezy checkout will not work');
+  }
+  if (configWarnings.length > 0) {
+    console.warn(
+      '[JobSift] ⚠ Configuration placeholders detected:\n' +
+      configWarnings.map(w => '  • ' + w).join('\n')
+    );
+  }
+
   const existing = await new Promise(r =>
     chrome.storage.local.get('jobsift', d => r(d.jobsift || null))
   );

@@ -28,7 +28,13 @@
         }
       }
       if (toProcess.size > 0) {
-        setTimeout(() => toProcess.forEach(card => onNewCard(card)), 180);
+        setTimeout(() => toProcess.forEach(card => {
+          try {
+            onNewCard(card);
+          } catch (err) {
+            console.warn('[JobSift] Observer card processing error:', err);
+          }
+        }), 180);
       }
     });
     _observer.observe(document.body, { childList:true, subtree:true });

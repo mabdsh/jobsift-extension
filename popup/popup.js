@@ -222,9 +222,16 @@ async function save() {
   };
 
   try {
-    // Read existing stored data first — preserves deviceId, email, and any
-    // other fields that share the 'jobsift' storage key with the profile.
     const existing = await load() || {};
+
+    // Dirty-check: skip the write entirely if the profile hasn't changed.
+    // Saving an identical profile triggers storage.onChanged in every open
+    // LinkedIn/Indeed tab, which calls _clearScoreCache() and reprocessAll()
+    // — re-scoring all visible jobs from scratch for no reason.
+    if (JSON.stringify(existing.profile) === JSON.stringify(profile)) {
+      return;
+    }
+
     await chrome.storage.local.set({ jobsift: { ...existing, profile } });
 
     const toast = document.getElementById('saveToast');

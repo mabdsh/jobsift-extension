@@ -68,7 +68,7 @@
   const CACHE_MAX    = 500;
 
   function _profileHash(profile) {
-    if (!profile) return '';
+    if (!profile) return ''
     return [
       ...(profile.mustHaveSkills  || []).slice().sort(),
       ...(profile.primarySkills   || []).slice().sort(),
@@ -79,7 +79,11 @@
       ...(profile.avoidIndustries || []).slice().sort(),
       String(profile.minSalary       || 0),
       String(profile.experienceYears || 0),
-    ].join('|');
+      // currentTitle and careerGoal are sent to the AI in buildProfileSummary
+      // and affect scores, so they must invalidate the cache when changed.
+      String(profile.currentTitle || ''),
+      String(profile.careerGoal   || ''),
+    ].join('|')
   }
 
   function _isValidCacheEntry(entry, profileHash) {
@@ -579,19 +583,23 @@
     if (!isJobsPage() || isDetailPage()) return;
     const onIndeed = isIndeedPage();
     _continuousScanner = setInterval(() => {
-      if (!isJobsPage() || isDetailPage()) return;
-      let unscored;
-      if (onIndeed) {
-        unscored = (window.findAllIndeedCards?.() || []).filter(c =>
-          !c.dataset.jsDone && !c.dataset.jsProcessing && !c.querySelector('.js-badge')
-        );
-      } else {
-        unscored = (window.findAllJobCards?.() || []).filter(c => {
-          const li = c.closest('li') || c;
-          return !li.dataset.jsDone && !li.dataset.jsProcessing && !li.querySelector('.js-badge');
-        });
+      try {
+        if (!isJobsPage() || isDetailPage()) return;
+        let unscored;
+        if (onIndeed) {
+          unscored = (window.findAllIndeedCards?.() || []).filter(c =>
+            !c.dataset.jsDone && !c.dataset.jsProcessing && !c.querySelector('.js-badge')
+          );
+        } else {
+          unscored = (window.findAllJobCards?.() || []).filter(c => {
+            const li = c.closest('li') || c;
+            return !li.dataset.jsDone && !li.dataset.jsProcessing && !li.querySelector('.js-badge');
+          });
+        }
+        if (unscored.length > 0) scheduleBatch();
+      } catch (err) {
+        console.warn('[JobSift] Continuous scanner error:', err);
       }
-      if (unscored.length > 0) scheduleBatch();
     }, 2000);
   }
 
@@ -760,23 +768,33 @@
   async function init() {
     if (_initDone) return;
     _initDone = true;
-    _prefs    = await loadPreferences();
+
+    try {
+      _prefs = await loadPreferences();
+    } catch (err) {
+      console.warn('[JobSift] Failed to load preferences:', err);
+      _prefs = null;
+    }
 
     listenForChanges();
     watchNavigation();
 
-    if (isDetailPage()) {
-      // LinkedIn /jobs/view/ direct load OR Indeed /viewjob direct load
-      if (isIndeedPage()) handleIndeedRightPane();
-      else                handleDetailPage();
-    } else if (isJobsPage()) {
-      startPolling();
-      startObserver();           // also starts setupIndeedRightPaneObserver if on Indeed
-      startContinuousScanning();
-      // Indeed: if page loaded with ?jk= already set, score the right pane
-      if (isIndeedPage() && _lastIndeedJk) {
-        setTimeout(() => handleIndeedRightPane(), 600);
+    try {
+      if (isDetailPage()) {
+        // LinkedIn /jobs/view/ direct load OR Indeed /viewjob direct load
+        if (isIndeedPage()) handleIndeedRightPane();
+        else                handleDetailPage();
+      } else if (isJobsPage()) {
+        startPolling();
+        startObserver();           // also starts setupIndeedRightPaneObserver if on Indeed
+        startContinuousScanning();
+        // Indeed: if page loaded with ?jk= already set, score the right pane
+        if (isIndeedPage() && _lastIndeedJk) {
+          setTimeout(() => handleIndeedRightPane(), 600);
+        }
       }
+    } catch (err) {
+      console.warn('[JobSift] Init error:', err);
     }
   }
 
