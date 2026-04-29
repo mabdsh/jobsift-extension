@@ -1,6 +1,8 @@
-// JobSift AI Analyzer v3.0.0
-// Renders deep analysis inside the panel — decision → summary →
-// key requirements → strengths → gaps → tips → insights
+// JobSift AI Analyzer v3.1.0
+// v3.1.0: getFullDescription() updated to use data-testid="expandable-text-box" —
+//         the previous class-based selectors are dead on LinkedIn's new obfuscated DOM.
+//         Renders deep analysis inside the panel: decision → summary →
+//         key requirements → strengths → gaps → tips → insights
 
 (function () {
   'use strict';
@@ -9,7 +11,12 @@
 
   const _deepCache = new Map();
 
+  // ── Job description selectors ──────────────────────────────────────────────
+  // Priority order:
+  //   1. data-testid="expandable-text-box" — stable across DOM refactors (NEW PRIMARY)
+  //   2. Legacy class selectors — kept as fallbacks for older LinkedIn layouts
   const JD_SELECTORS = [
+    '[data-testid="expandable-text-box"]',
     '.jobs-description-content__text',
     '.jobs-description__content',
     '[class*="jobs-description-content__text"]',
@@ -61,7 +68,6 @@
 
   function renderLoading(panel) {
     const sec = getOrCreate(panel);
-    // Structured skeleton that previews the actual content layout
     sec.innerHTML = `
       <div class="js-ai-hdr">
         <span class="js-ai-badge">AI</span>
@@ -85,19 +91,14 @@
       <span class="js-ai-title">Deep analysis</span>
     </div>`;
 
-    // Decision — the most important output, shown first and prominently
-    // This is the AI's direct verdict: "Apply — your Laravel stack matches their core"
     if (r.decision) {
       html += `<div class="js-ai-decision">${_esc(r.decision)}</div>`;
     }
 
-    // Summary — 2 sentence overview of role fit
     if (r.summary) {
       html += `<div class="js-ai-summary">${_esc(r.summary)}</div>`;
     }
 
-    // Key requirements — what this job actually needs (extracted from JD)
-    // Helps users quickly see if they qualify before reading further
     if (r.keyRequirements?.length) {
       html += `<div class="js-ai-list">
         <div class="js-ai-list-ttl js-ai-list-ttl--req">Key requirements</div>`;
@@ -107,7 +108,6 @@
       html += `</div>`;
     }
 
-    // Strengths — specific matching points for THIS role
     if (r.strengths?.length) {
       html += `<div class="js-ai-list">
         <div class="js-ai-list-ttl js-ai-list-ttl--strength">Your strengths</div>`;
@@ -117,7 +117,6 @@
       html += `</div>`;
     }
 
-    // Gaps — real gaps with what to do about them
     if (r.gaps?.length) {
       html += `<div class="js-ai-list">
         <div class="js-ai-list-ttl js-ai-list-ttl--gap">Gaps to address</div>`;
@@ -127,7 +126,6 @@
       html += `</div>`;
     }
 
-    // Application tips — specific to this role
     if (r.tips?.length) {
       html += `<div class="js-ai-list">
         <div class="js-ai-list-ttl js-ai-list-ttl--tip">Application tips</div>`;
@@ -137,7 +135,6 @@
       html += `</div>`;
     }
 
-    // Insight — one non-obvious observation
     if (r.insights) {
       html += `<div class="js-ai-insight">💡 ${_esc(r.insights)}</div>`;
     }
@@ -179,8 +176,6 @@
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
-  // Escape HTML to prevent XSS from AI output being injected into innerHTML.
-  // The AI output is trusted content but sanitization is good practice.
   function _esc(str) {
     if (!str) return '';
     return String(str)
@@ -195,7 +190,6 @@
     if (!sec) {
       sec = document.createElement('div');
       sec.className = 'js-ai-section';
-      // Insert before criteria so AI stays above the breakdown
       const criteria = panel.querySelector('.js-criteria');
       criteria ? panel.insertBefore(sec, criteria) : panel.appendChild(sec);
     }

@@ -1,4 +1,6 @@
-// JobSift Content v2.3.0
+// JobSift Content v2.4.0
+// v2.4.0: LinkedIn job detail page support — auto-scores /jobs/view/ URLs,
+//         injects banner above "About the job" section, panel on demand.
 // v2.3.0: fix SPA navigation — badges now appear when clicking Jobs tab from any LinkedIn page
 // v2.2.0: score cache in chrome.storage.local + filter reset on navigation/reprocess
 
@@ -7,11 +9,14 @@
   if (window._jsContent) return;
   window._jsContent = true;
 
-  let _prefs       = null;
-  let _initDone    = false;
-  let _batchTimer  = null;
-  let _pollTimers  = [];
-  let _navObserver = null;
+  let _prefs             = null;
+  let _initDone          = false;
+  let _batchTimer        = null;
+  let _pollTimers        = [];
+  let _navObserver       = null;
+  let _detailProcessing  = false;
+  let _continuousScanner = null;   // safety-net scanner for SPA navigation timing gaps
+  let _lastPathname      = location.pathname; // tracks pathname separately from full href
 
   const _store = new Map();
 
@@ -20,27 +25,26 @@
     return new Promise(r => chrome.storage.local.get('jobsift', d => r(d.jobsift || null)));
   }
 
+  // ── Page type detection ────────────────────────────────────────────────────
+  // isDetailPage() takes priority — detail URLs start with /jobs so both return
+  // true for /jobs/view/, but the more specific check is checked first everywhere.
+
+  function isDetailPage() {
+    return /\/jobs\/view\/\d+/.test(location.pathname);
+  }
+
   function isJobsPage() {
     const p = location.pathname;
     return p.startsWith('/jobs') || p.includes('/collections/') || p.startsWith('/search/results/jobs');
   }
 
   // ── Score cache ────────────────────────────────────────────────────────────
-  // Caches AI + rule scores in chrome.storage.local so repeat visits to the
-  // same jobs page don't trigger a Groq API call.
-  //
-  // Cache key:   jobId
-  // Invalidated: profile change (profileHash mismatch) or age > 24 hours
-  // Max size:    500 entries — older entries pruned on write
-  //
-  // Storage key: 'jobsift_scores' → { [jobId]: { result, timestamp, profileHash } }
+  // Shared between search-page batch scoring and detail-page scoring.
+  // Key: jobId. Invalidated by profile change or age > 24 hours. Max 500 entries.
 
-  const CACHE_TTL_MS  = 24 * 60 * 60 * 1000; // 24 hours
-  const CACHE_MAX     = 500;
+  const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+  const CACHE_MAX    = 500;
 
-  // Generates a string that changes whenever scoring-relevant profile fields change.
-  // Sorts each array so the hash is order-independent (adding skills in a different
-  // order doesn't invalidate the cache).
   function _profileHash(profile) {
     if (!profile) return '';
     return [
@@ -58,15 +62,13 @@
 
   function _isValidCacheEntry(entry, profileHash) {
     if (!entry || !entry.result) return false;
-    if (entry.profileHash !== profileHash) return false; // profile changed
+    if (entry.profileHash !== profileHash) return false;
     return (Date.now() - (entry.timestamp || 0)) < CACHE_TTL_MS;
   }
 
-  // Removes stale entries (wrong profile hash or expired).
-  // Caps at CACHE_MAX keeping the most recent entries.
   function _pruneCache(cache, profileHash) {
-    const now     = Date.now();
-    const valid   = Object.entries(cache).filter(
+    const now   = Date.now();
+    const valid = Object.entries(cache).filter(
       ([, v]) => v.profileHash === profileHash && (now - (v.timestamp || 0)) < CACHE_TTL_MS
     );
     if (valid.length > CACHE_MAX) {
@@ -88,7 +90,7 @@
     chrome.storage.local.remove('jobsift_scores');
   }
 
-  // ── Phase 1: inject loading badges ────────────────────────────────────────
+  // ── Search page: Phase 1 — inject loading badges ───────────────────────────
   function showLoadingBadges() {
     const cards = window.findAllJobCards().filter(c => {
       const li = c.closest('li') || c;
@@ -98,7 +100,7 @@
     return cards;
   }
 
-  // ── Phase 2: batch score with cache ───────────────────────────────────────
+  // ── Search page: Phase 2 — batch score with cache ──────────────────────────
   async function batchScore(cards) {
     if (!cards.length) return;
 
@@ -110,17 +112,14 @@
       profile.targetRoles?.length
     );
 
-    // Extract job data for all cards
     const jobs = cards.map(card => {
       const jobData = window.extractJobData(card);
       if (jobData.jobId) _store.set(jobData.jobId, { jobData });
       return jobData;
     });
 
-    // ── Cache check ─────────────────────────────────────────────────────────
-    // Separate cards into cached (apply immediately) and uncached (need scoring).
     const scoreCache    = await _loadScoreCache();
-    const cachedItems   = [];   // { jobData, li, result }
+    const cachedItems   = [];
     const uncachedCards = [];
     const uncachedJobs  = [];
 
@@ -137,13 +136,11 @@
       }
     });
 
-    // Apply cached results immediately — no API call, no wait
     cachedItems.forEach(({ jobData, li, result }) => {
       if (jobData.jobId) _store.set(jobData.jobId, { jobData, result });
       window.updateBadgeWithResult(li, result, jobData);
     });
 
-    // If everything was cached, just refresh the UI and return
     if (!uncachedCards.length) {
       window.injectFilterBar();
       window.refreshFilterBar();
@@ -151,7 +148,6 @@
       return;
     }
 
-    // ── Rule-based scoring (local, instant, always runs) ────────────────────
     const ruleResults = new Map();
     uncachedJobs.forEach(jd => {
       const r   = window.scoreJob(jd, profile);
@@ -159,7 +155,6 @@
       ruleResults.set(key, r);
     });
 
-    // ── AI scoring (skipped if no meaningful profile) ────────────────────────
     let aiResults      = [];
     let aiLimitReached = false;
     let aiResetAt      = null;
@@ -177,12 +172,9 @@
           aiLimitReached = true;
           aiResetAt      = res.reset_at || null;
         }
-      } catch (_) {
-        // Network error or timeout — fall through to rule-based silently
-      }
+      } catch (_) {}
     }
 
-    // ── Merge results and update badges ─────────────────────────────────────
     const newCacheEntries = {};
 
     uncachedCards.forEach((card, i) => {
@@ -206,9 +198,7 @@
       }
 
       const ai =
-        (jobData.jobId
-          ? aiResults.find(r => r.jobId === jobData.jobId)
-          : null) ||
+        (jobData.jobId ? aiResults.find(r => r.jobId === jobData.jobId) : null) ||
         aiResults.find(r => r.jobId === String(i)) ||
         aiResults[i];
 
@@ -231,8 +221,6 @@
 
       if (jobData.jobId) {
         _store.set(jobData.jobId, { jobData, result });
-        // Cache only meaningful scores — don't cache null/gray results from
-        // empty profiles since they'd just need re-scoring on next visit
         if (result.score !== null) {
           newCacheEntries[jobData.jobId] = {
             result,
@@ -245,7 +233,6 @@
       window.updateBadgeWithResult(li, result, jobData);
     });
 
-    // Persist new cache entries (merged with existing, pruned to max)
     if (Object.keys(newCacheEntries).length) {
       const updated = _pruneCache(
         { ...scoreCache, ...newCacheEntries },
@@ -259,7 +246,6 @@
     updateExtensionBadge();
   }
 
-  // Debounce: collect cards for 400ms then score together
   function scheduleBatch() {
     clearTimeout(_batchTimer);
     _batchTimer = setTimeout(async () => {
@@ -268,10 +254,122 @@
     }, 400);
   }
 
-  // ── AI hook ────────────────────────────────────────────────────────────────
-  window._jobsiftOnPanelOpen = function (jobData, panelEl, li) {
+  // ── Detail page: wait for DOM ──────────────────────────────────────────────
+  // Polls for the LazyColumn — the outermost stable container for the job detail
+  // pane. Waiting for this (rather than the deeper "aboutTheJob" section) means
+  // the banner can inject at the very top, above the job title, as soon as the
+  // container exists. LinkedIn renders this asynchronously after SPA navigation
+  // so we retry up to 5 seconds (20 × 250ms) before giving up.
+  async function waitForDetailDOM() {
+    for (let i = 0; i < 20; i++) {
+      const el = document.querySelector('[data-component-type="LazyColumn"]');
+      if (el) return el;
+      await new Promise(r => setTimeout(r, 250));
+    }
+    return null;
+  }
+
+  // ── Detail page: full scoring flow ────────────────────────────────────────
+  // Two-phase — mirrors the search-page flow:
+  //   Phase 1: inject loading banner (immediate visual feedback)
+  //   Phase 2a: rule-based score (instant, updates banner)
+  //   Phase 2b: AI score via JS_BATCH_SCORE (single job, updates banner again)
+  //
+  // Cache: reuses the same chrome.storage.local score cache as search badges.
+  // Panel: opened by the "View full analysis →" button in the banner (no auto-open).
+  async function handleDetailPage() {
+    if (_detailProcessing) return;
+    _detailProcessing = true;
+
+    try {
+      // Wait for LinkedIn to finish rendering the detail pane
+      const aboutJobEl = await waitForDetailDOM();
+      if (!aboutJobEl) return; // DOM never arrived — give up silently
+
+      // Inject loading banner before any async work so user gets instant feedback
+      window.injectDetailBanner();
+
+      // Extract job data using stable selectors (URL, document.title, data-testid)
+      const jobData = window.extractDetailPageData?.();
+      if (!jobData?.title) {
+        window.removeDetailBanner();
+        return;
+      }
+
+      const profile     = _prefs?.profile || {};
+      const profileHash = _profileHash(profile);
+      const hasProfile  = !!(
+        profile.mustHaveSkills?.length ||
+        profile.primarySkills?.length  ||
+        profile.targetRoles?.length
+      );
+
+      // ── Cache check ──────────────────────────────────────────────────────
+      if (jobData.jobId) {
+        const scoreCache = await _loadScoreCache();
+        const entry      = scoreCache[jobData.jobId];
+        if (_isValidCacheEntry(entry, profileHash)) {
+          window.updateDetailBanner(entry.result, jobData);
+          return;
+        }
+      }
+
+      // ── Phase 2a: rule-based score (local, instant) ──────────────────────
+      const ruleResult = window.scoreJob(jobData, profile);
+      window.updateDetailBanner(ruleResult, jobData);
+
+      // ── Phase 2b: AI score ───────────────────────────────────────────────
+      if (hasProfile) {
+        try {
+          const res = await chrome.runtime.sendMessage({
+            type:    'JS_BATCH_SCORE',
+            profile,
+            jobs:    [jobData],
+          });
+
+          if (res.ok && res.results?.length) {
+            const ai = res.results[0];
+            const result = {
+              score:           ai.score,
+              label:           ai.label,
+              text:            ai.text,
+              verdict:         ai.verdict,
+              criteria:        ruleResult.criteria        || [],
+              tips:            ruleResult.tips            || [],
+              recommendation:  ruleResult.recommendation  || null,
+              missingCritical: ruleResult.missingCritical || [],
+              warnings:        ruleResult.warnings        || [],
+              confidence:      ruleResult.confidence      || 1,
+              metCount:        ruleResult.metCount        || 0,
+              total:           ruleResult.total           || 0,
+            };
+
+            window.updateDetailBanner(result, jobData);
+
+            // Cache the AI result so the next visit to this job is instant
+            if (result.score !== null && jobData.jobId) {
+              const scoreCache = await _loadScoreCache();
+              const updated    = _pruneCache(
+                { ...scoreCache, [jobData.jobId]: { result, timestamp: Date.now(), profileHash } },
+                profileHash
+              );
+              _saveScoreCache(updated);
+            }
+          }
+          // If res.needs_upgrade or res.ok=false: rule result stays shown — silent fallback
+        } catch (_) {
+          // Network/timeout: rule result stays shown
+        }
+      }
+    } finally {
+      _detailProcessing = false;
+    }
+  }
+
+  // ── AI panel hook ──────────────────────────────────────────────────────────
+  window._jobsiftOnPanelOpen = function (jobData, panelEl, anchor) {
     if (typeof window.analyzeJobDeep === 'function') {
-      window.analyzeJobDeep(jobData, panelEl, li, _prefs);
+      window.analyzeJobDeep(jobData, panelEl, anchor, _prefs);
     }
   };
 
@@ -280,37 +378,68 @@
     chrome.runtime.sendMessage({ type: 'SET_BADGE', count: green }).catch(() => {});
   }
 
+  // ── Continuous background scanner ──────────────────────────────────────────
+  // Runs every 2 seconds on jobs pages. Picks up any cards that slipped through
+  // the observer or poll timers due to SPA navigation timing gaps.
+  // This is the safety net: even if every other mechanism fails, within 2s of
+  // cards appearing in the DOM they will be found and scored.
+  function startContinuousScanning() {
+    stopContinuousScanning();
+    if (!isJobsPage() || isDetailPage()) return;
+    _continuousScanner = setInterval(() => {
+      if (!isJobsPage() || isDetailPage()) return;
+      const unscored = (window.findAllJobCards?.() || []).filter(c => {
+        const li = c.closest('li') || c;
+        return !li.dataset.jsDone && !li.dataset.jsProcessing && !li.querySelector('.js-badge');
+      });
+      if (unscored.length > 0) scheduleBatch();
+    }, 2000);
+  }
+
+  function stopContinuousScanning() {
+    if (_continuousScanner) { clearInterval(_continuousScanner); _continuousScanner = null; }
+  }
+
+  // ── Search page polling + observer ─────────────────────────────────────────
   function startPolling() {
     _pollTimers.forEach(clearTimeout);
     _pollTimers = [];
-    if (!isJobsPage()) return;
+    if (!isJobsPage() || isDetailPage()) return;
     [300, 1200, 3000, 6000, 12000].forEach(ms => {
       _pollTimers.push(setTimeout(scheduleBatch, ms));
     });
   }
 
   function startObserver() {
-    if (!isJobsPage()) return;
+    if (!isJobsPage() || isDetailPage()) return;
     window.setupObserver(() => scheduleBatch(), window.findJobCardsIn);
   }
 
+  // ── Reprocess (profile change) ─────────────────────────────────────────────
   function reprocessAll() {
     window.disconnectObserver?.();
+    stopContinuousScanning();
+
     document.querySelectorAll('.js-badge, .js-panel, #js-filter-bar').forEach(el => el.remove());
     document.querySelectorAll('[data-js-done],[data-js-processing]').forEach(el => {
       delete el.dataset.jsDone;
       delete el.dataset.jsProcessing;
     });
     window.hidePanel?.();
-
-    // Reset filter state so new cards aren't hidden by a stale filter value.
-    // Must come AFTER removing the filter bar DOM element.
     window.resetFilter?.();
+    window.removeDetailBanner?.();
 
     _store.clear();
+    _detailProcessing = false;
     chrome.runtime.sendMessage({ type: 'SET_BADGE', count: 0 }).catch(() => {});
-    startPolling();
-    startObserver();
+
+    if (isDetailPage()) {
+      handleDetailPage();
+    } else if (isJobsPage()) {
+      startPolling();
+      startObserver();
+      startContinuousScanning();
+    }
   }
 
   function listenForChanges() {
@@ -318,8 +447,6 @@
       if (area === 'local' && changes.jobsift) {
         const newPrefs = changes.jobsift.newValue;
 
-        // If the profile itself changed, clear the score cache so jobs
-        // are re-scored against the new profile on the next visit.
         const oldHash = _profileHash(_prefs?.profile);
         const newHash = _profileHash(newPrefs?.profile);
         if (oldHash !== newHash) {
@@ -332,57 +459,87 @@
     });
   }
 
+  // ── SPA navigation watcher ─────────────────────────────────────────────────
+  // Polls location.href every 400ms. Separates two kinds of URL change:
+  //
+  //   PATHNAME change (e.g. /feed/ → /jobs/search/):
+  //     Major navigation. Full reset: clear badges, reset filter, restart
+  //     observer, start continuous scanner. Badges must be re-scored from scratch.
+  //
+  //   QUERY-PARAM-ONLY change (e.g. ?currentJobId=123 → ?currentJobId=456):
+  //     User clicked a different card on the same page. Do NOT reset the filter
+  //     bar or wipe badges — just let the right-pane update. The left-panel
+  //     badges are already correct.
+  //
+  // This fixes two bugs:
+  //   1. Every card click on collections/recommended/ was wiping the filter bar.
+  //   2. The observer/poll timers could miss cards due to URL changing twice
+  //      quickly — the continuous scanner is the guaranteed fallback.
+
   let _lastUrl = location.href;
 
   function watchNavigation() {
     if (_navObserver) return;
 
-    // setInterval URL polling is more reliable than MutationObserver for SPA
-    // navigation detection. LinkedIn's pushState fires BEFORE DOM mutations,
-    // so a MutationObserver callback can fire while location.href still shows
-    // the old URL — causing the URL-change logic to miss the navigation entirely.
-    //
-    // A 400ms interval with a string compare is immune to these race conditions,
-    // uses negligible CPU (<1μs per tick), and guarantees detection within 400ms.
     _navObserver = setInterval(() => {
       if (location.href === _lastUrl) return;
       _lastUrl = location.href;
 
-      // Clear scored-card markers so new page cards get fresh badges
-      document.querySelectorAll('[data-js-done],[data-js-processing]').forEach(el => {
-        delete el.dataset.jsDone;
-        delete el.dataset.jsProcessing;
-      });
+      const newPathname      = location.pathname;
+      const pathnameChanged  = newPathname !== _lastPathname;
+      _lastPathname          = newPathname;
 
-      // Reset filter so new page always starts at "All"
-      window.resetFilter?.();
+      if (pathnameChanged) {
+        // Full reset — we're on a genuinely different page
+        document.querySelectorAll('[data-js-done],[data-js-processing]').forEach(el => {
+          delete el.dataset.jsDone;
+          delete el.dataset.jsProcessing;
+        });
+        window.resetFilter?.();
+        window.removeDetailBanner?.();
+        _detailProcessing = false;
+      }
+      // Query-param-only change (e.g. currentJobId): skip reset entirely.
+      // The card list hasn't changed — only the right-pane detail changed.
 
-      if (isJobsPage()) {
-        // 200ms lets LinkedIn begin rendering the job list before we scan for cards
-        setTimeout(() => { startPolling(); startObserver(); }, 200);
+      if (isDetailPage()) {
+        if (pathnameChanged) setTimeout(() => handleDetailPage(), 300);
+      } else if (isJobsPage()) {
+        if (pathnameChanged) {
+          // Start fresh observer and continuous scanner for the new page
+          startObserver();
+          stopContinuousScanning();
+          startContinuousScanning();
+          startPolling();
+        }
+        // Always run a batch scan — catches cards on both pathname changes and
+        // the edge case where currentJobId change coincides with new cards
+        // appearing (e.g. infinite scroll loading while changing cards)
+        scheduleBatch();
       } else {
+        // Navigated away from jobs entirely
+        stopContinuousScanning();
+        window.disconnectObserver?.();
         chrome.runtime.sendMessage({ type: 'SET_BADGE', count: 0 }).catch(() => {});
       }
     }, 400);
   }
 
+  // ── Init ───────────────────────────────────────────────────────────────────
   async function init() {
     if (_initDone) return;
     _initDone = true;
     _prefs    = await loadPreferences();
 
-    // Always set up these listeners regardless of the current page.
-    // watchNavigation detects SPA navigation to /jobs from any other page
-    // (e.g. feed → jobs tab click). Without this, users who start on /feed
-    // never get badges until they reload — the observer simply wasn't running.
     listenForChanges();
     watchNavigation();
 
-    // Scoring only starts if already on a jobs page on initial load.
-    // If the user navigates here later, watchNavigation handles it.
-    if (isJobsPage()) {
+    if (isDetailPage()) {
+      handleDetailPage();
+    } else if (isJobsPage()) {
       startPolling();
       startObserver();
+      startContinuousScanning();
     }
   }
 

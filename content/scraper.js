@@ -1,15 +1,13 @@
-// JobSift Scraper v2.0.1
+// JobSift Scraper v2.1.0
 // Extracts job data from LinkedIn job cards — /jobs/search/ only.
+// v2.1.0: added isDetailPage() + extractDetailPageData() for /jobs/view/ support.
 
 (function () {
   'use strict';
   if (window._jsScraper) return;
   window._jsScraper = true;
 
-  // Max characters of raw card text passed to the scorer and AI.
-  // LinkedIn cards can contain hundreds of recommended jobs in their DOM
-  // subtree — without a cap, rawText can exceed 50 KB per card and make
-  // the batch scoring prompt enormous.
+  // Max characters of raw card/description text passed to the scorer and AI.
   const RAW_TEXT_LIMIT = 4000;
 
   const CARD_SELECTORS = [
@@ -59,10 +57,94 @@
     '.job-card-container__salary-info',
   ];
 
-  // ── CRITICAL: require an actual job link, not just data attributes.
-  // LinkedIn "occludes" (empties) cards when off-screen but keeps the <li>
-  // with its data-occludable-job-id. Without this check we process empty
-  // shells and inject floating orphan badges.
+  // ── Detail page detection ──────────────────────────────────────────────────
+  // Returns true on /jobs/view/123456/ URLs (direct open OR SPA navigation).
+  function isDetailPage() {
+    return /\/jobs\/view\/\d+/.test(window.location.pathname);
+  }
+
+  // ── Detail page data extraction ────────────────────────────────────────────
+  // Uses only stable anchors that survive LinkedIn DOM class renames:
+  //   - Job ID:       URL regex (most reliable possible source)
+  //   - Title:        document.title (LinkedIn keeps this consistent)
+  //   - Company:      document.title (same)
+  //   - Description:  [data-testid="expandable-text-box"] (intentionally stable)
+  //   - Work type:    rawText scan via existing detectWorkType()
+  //   - Salary:       rawText scan via existing extractSalary()
+  //   - Experience:   title + rawText via existing extractExperience()
+  //   - Location:     best-effort paragraph scan; empty string on failure (non-scoring field)
+  function extractDetailPageData() {
+    try {
+      // ── Job ID ─────────────────────────────────────────────────────────────
+      const jobId = window.location.pathname.match(/\/jobs\/view\/(\d+)/)?.[1] || '';
+
+      // ── Title + company from document.title ────────────────────────────────
+      // Format: "Sr Laravel Engineer - ByteCrew | LinkedIn"
+      // Company names may contain dashes so only split on the FIRST " - ".
+      const pageTitle = document.title.replace(/\s*\|\s*LinkedIn\s*$/i, '').trim();
+      const dashIdx   = pageTitle.indexOf(' - ');
+      const title     = dashIdx > -1 ? pageTitle.slice(0, dashIdx).trim() : pageTitle;
+      const company   = dashIdx > -1 ? pageTitle.slice(dashIdx + 3).trim() : '';
+
+      // ── Full description ───────────────────────────────────────────────────
+      // data-testid is a stable attribute that LinkedIn uses for its own tests
+      // and avoids renaming during visual refactors. This is the best selector
+      // available on the new obfuscated-class LinkedIn DOM.
+      const descEl  = document.querySelector('[data-testid="expandable-text-box"]');
+      const rawText = descEl
+        ? descEl.textContent.replace(/\s+/g, ' ').trim().slice(0, RAW_TEXT_LIMIT)
+        : (document.body.innerText || '').replace(/\s+/g, ' ').trim().slice(0, RAW_TEXT_LIMIT);
+
+      // ── Work type — scan rawText, fall back to broader page scan ───────────
+      const workType = detectWorkType(rawText)
+                    || detectWorkType((document.body.innerText || '').slice(0, 3000));
+
+      // ── Salary + experience — reuse search-page helpers verbatim ──────────
+      const salary     = extractSalary(rawText);
+      const experience = extractExperience(title + ' ' + rawText);
+
+      // ── Location — best-effort, non-scoring, empty on failure ─────────────
+      // LinkedIn renders a <p> element that contains the title text followed
+      // by the city/country on the same line or next line. We extract the
+      // portion after the title text from the first matching paragraph.
+      let jobLocation = '';
+      try {
+        const lazyCol = document.querySelector('[data-component-type="LazyColumn"]');
+        if (lazyCol && title) {
+          const paras = Array.from(lazyCol.querySelectorAll('p')).slice(0, 30);
+          for (const p of paras) {
+            const text = p.textContent;
+            if (text.includes(title)) {
+              const afterTitle = text
+                .slice(text.indexOf(title) + title.length)
+                .replace(/\s+/g, ' ')
+                .trim();
+              // Accept as location if short, doesn't start with company name,
+              // and doesn't look like a date/applicant count string.
+              if (
+                afterTitle &&
+                afterTitle.length > 3 &&
+                afterTitle.length < 80 &&
+                !afterTitle.startsWith(company) &&
+                !afterTitle.includes(' ago') &&
+                !afterTitle.toLowerCase().includes('applied')
+              ) {
+                jobLocation = afterTitle;
+              }
+              break;
+            }
+          }
+        }
+      } catch (_) {}
+
+      return { jobId, title, company, location: jobLocation, workType, salary, experience, rawText };
+    } catch (_) {
+      return { jobId: '', title: '', company: '', location: '', workType: null, salary: null, experience: null, rawText: '' };
+    }
+  }
+
+  // ── Card helpers (unchanged from v2.0.1) ──────────────────────────────────
+
   function looksLikeJobCard(el) {
     if (!el || el.nodeType !== 1) return false;
     return !!el.querySelector('a[href*="/jobs/view/"], a[href*="currentJobId="]');
@@ -80,7 +162,6 @@
         if (deduped.length > 0) return deduped;
       } catch (_) {}
     }
-    // Link-based fallback
     try {
       const seen       = new Set();
       const candidates = [];
@@ -144,9 +225,9 @@
   function detectWorkType(text) {
     if (!text) return null;
     const t = text.toLowerCase();
-    if (t.includes('remote'))                                                           return 'remote';
-    if (t.includes('hybrid'))                                                           return 'hybrid';
-    if (t.includes('on-site')||t.includes('on site')||t.includes('onsite')||t.includes('in-person')) return 'onsite';
+    if (t.includes('remote'))                                                                     return 'remote';
+    if (t.includes('hybrid'))                                                                     return 'hybrid';
+    if (t.includes('on-site') || t.includes('on site') || t.includes('onsite') || t.includes('in-person')) return 'onsite';
     return null;
   }
 
@@ -201,22 +282,12 @@
     return null;
   }
 
-  // Minimal safe object returned when extraction completely fails for a card.
-  // This lets the rest of the pipeline (scorer, injector) handle it gracefully
-  // instead of throwing or leaving the card with a stuck loading badge.
   function _emptyJobData() {
     return { jobId:'', title:'', company:'', location:'', workType:null, salary:null, experience:null, rawText:'' };
   }
 
   function extractJobData(card) {
-    // Wrap the entire extraction in try/catch.
-    // A single malformed card (e.g. detached from DOM mid-parse, unexpected
-    // LinkedIn DOM shape) must not abort the whole batch.
     try {
-      // Cap rawText: card.textContent can be very large on paginated lists
-      // because LinkedIn reuses DOM nodes and may leave hidden job data inside.
-      // 4 KB is more than enough for skill matching; the full JD is fetched
-      // separately in the deep analysis flow.
       const rawText  = (card.textContent || '').replace(/\s+/g, ' ').trim().slice(0, RAW_TEXT_LIMIT);
       const titleEl  = firstText(card, TITLE_SELECTORS);
       const title    = clean(titleEl);
@@ -248,16 +319,16 @@
 
       return { jobId, title, company, location, workType, salary, experience, rawText };
     } catch (_) {
-      // Return a safe empty object — the scorer will return a null-score gray
-      // badge, and the panel will tell the user the profile needs completing.
       return _emptyJobData();
     }
   }
 
   // ── Exports ────────────────────────────────────────────────────────────────
-  window.TITLE_SELECTORS = TITLE_SELECTORS;
-  window.findAllJobCards  = findAllJobCards;
-  window.findJobCardsIn   = findJobCardsIn;
-  window.extractJobData   = extractJobData;
+  window.TITLE_SELECTORS       = TITLE_SELECTORS;
+  window.findAllJobCards        = findAllJobCards;
+  window.findJobCardsIn         = findJobCardsIn;
+  window.extractJobData         = extractJobData;
+  window.isDetailPage           = isDetailPage;
+  window.extractDetailPageData  = extractDetailPageData;
 
 }());

@@ -1,4 +1,6 @@
-// JobSift Injector v2.7.0
+// JobSift Injector v2.8.0
+// v2.8.0: detail page banner — injectDetailBanner(), updateDetailBanner(),
+//         removeDetailBanner(), getOrCreateDetailPanelRoot()
 // v2.7.0: persistent count cache — survives LinkedIn's virtual scroll DOM mutations.
 //         Amber filter fixed to show only amber jobs (not green+amber).
 
@@ -11,10 +13,6 @@
   let _filterBar = null;
 
   // ── Persistent score result cache ──────────────────────────────────────────
-  // Keyed by jobId (or a stable title|company fallback).
-  // Survives LinkedIn's virtual DOM mutations — scored jobs remain counted even
-  // after LinkedIn removes their <li> elements from the viewport. Only cleared
-  // on navigation (URL change) or reprocessAll (profile update).
   const _jobResults = new Map();
 
   function _jobKey(jobData, li) {
@@ -24,7 +22,7 @@
       || (jobData?.title ? `${jobData.title}|${jobData.company || ''}` : null);
   }
 
-  // ── Loading badge ──────────────────────────────────────────────────────────
+  // ── Loading badge (search page cards) ─────────────────────────────────────
   function createLoadingBadge() {
     const badge = document.createElement('span');
     badge.className = 'js-badge js-badge--loading';
@@ -37,7 +35,6 @@
     return badge;
   }
 
-  // ── Find right-side actions column ────────────────────────────────────────
   function findActionsContainer(card, li) {
     const selectors = [
       '.job-card-list__actions-container',
@@ -51,7 +48,6 @@
     return null;
   }
 
-  // ── Inject loading badge ───────────────────────────────────────────────────
   function injectLoadingBadge(card) {
     const li = card.closest('li') || card;
     if (li.dataset.jsDone || li.dataset.jsProcessing) return;
@@ -79,7 +75,6 @@
     delete card.dataset.jsProcessing;
   }
 
-  // ── Replace loading badge with scored badge ────────────────────────────────
   function updateBadgeWithResult(li, result, jobData) {
     const old = li.querySelector('.js-badge');
     if (!old) return;
@@ -116,8 +111,6 @@
 
     old.replaceWith(badge);
 
-    // Persist the result so it survives DOM mutations.
-    // Uses jobId as key — stable across virtual scroll recycling.
     const key = _jobKey(jobData, li);
     if (key) _jobResults.set(key, safeLabel);
 
@@ -196,25 +189,17 @@
     _filterBar = bar;
   }
 
-  // ── Refresh filter bar counts ──────────────────────────────────────────────
-  // Uses _jobResults cache for scored jobs — reliable regardless of DOM state.
-  // Loading badges (jobs being scored right now) are read from the live DOM
-  // since they haven't been persisted yet.
   function refreshFilterBar() {
     if (!_filterBar || !document.contains(_filterBar)) { injectFilterBar(); return; }
 
-    // Scored job counts from persistent cache
     const counts = { green:0, amber:0, red:0, total:0, loading:0 };
     _jobResults.forEach(label => {
       counts.total++;
       if      (label === 'green') counts.green++;
       else if (label === 'amber') counts.amber++;
       else if (label === 'red')   counts.red++;
-      // 'gray' counts toward total only — not a named filter category
     });
 
-    // Loading badges: currently being scored, not yet in cache
-    // Read from DOM (they exist exactly while scoring is in flight)
     const loading = document.querySelectorAll('.js-badge--loading').length;
     counts.loading = loading;
     counts.total  += loading;
@@ -229,19 +214,13 @@
     if (s) s.textContent = loading > 0 ? `Scoring ${loading}…` : '';
   }
 
-  // ── Apply filter to all current cards ─────────────────────────────────────
   function applyJobFilter(filter) {
     _filter = filter;
     document.querySelectorAll('li[data-js-done]').forEach(li => _applyFilterToCard(li, filter));
   }
 
-  // ── Apply filter to a single card ─────────────────────────────────────────
-  // Bug fix: amber filter previously showed green+amber, making the "Partial: 5"
-  // count show 17 cards (12 green + 5 amber). Each filter now shows exactly
-  // the jobs counted in its badge.
   function _applyFilterToCard(li, filter) {
     const badge = li.querySelector('.js-badge');
-    // Always show loading cards — they have no label yet
     if (badge?.classList.contains('js-badge--loading') || filter === 'all') {
       li.style.display = '';
       return;
@@ -250,26 +229,179 @@
               : badge?.classList.contains('js-badge--amber') ? 'amber'
               : badge?.classList.contains('js-badge--red')   ? 'red' : 'gray';
     const show = filter === 'green' ? lbl === 'green'
-               : filter === 'amber' ? lbl === 'amber'   // Only amber — matches the count shown
+               : filter === 'amber' ? lbl === 'amber'
                : filter === 'red'   ? lbl === 'red' : true;
     li.style.display = show ? '' : 'none';
   }
 
-  // ── Filter reset ───────────────────────────────────────────────────────────
-  // Called by content.js on URL navigation and reprocessAll.
-  // Clears both the filter state and the scored job cache so the next page
-  // starts fresh with accurate counts.
   function resetFilter() {
     _filter    = 'all';
     _filterBar = null;
     _jobResults.clear();
   }
 
-  window.injectLoadingBadge    = injectLoadingBadge;
-  window.updateBadgeWithResult = updateBadgeWithResult;
-  window.injectFilterBar       = injectFilterBar;
-  window.refreshFilterBar      = refreshFilterBar;
-  window.applyJobFilter        = applyJobFilter;
-  window.resetFilter           = resetFilter;
+  // ── Detail page banner ─────────────────────────────────────────────────────
+  // A full-width banner injected above the "About the job" section on detail
+  // pages. Shows the JobSift score + a "View full analysis →" button that
+  // opens the standard panel.
+  //
+  // Injection point: [data-sdui-component*="aboutTheJob"] parent — stable
+  // data-sdui-component attribute that LinkedIn uses for its own component
+  // identification and doesn't rename during visual refactors.
+
+  let _detailBanner = null;
+
+  function injectDetailBanner() {
+    removeDetailBanner();
+
+    // Inject as the very first child of the LazyColumn — this puts the banner
+    // above the job title, company info, and all other detail page content.
+    // data-component-type="LazyColumn" is a stable structural attribute that
+    // LinkedIn uses for its own component system and doesn't rename casually.
+    const lazyCol = document.querySelector('[data-component-type="LazyColumn"]');
+    if (!lazyCol) return null;
+
+    const banner = document.createElement('div');
+    banner.id = 'js-detail-banner';
+    banner.className = 'js-detail-banner js-detail-banner--loading';
+    banner.setAttribute('role', 'status');
+    banner.setAttribute('aria-label', 'JobSift: scoring this job…');
+
+    // Loading state — pulse dot + text
+    banner.innerHTML = `
+      <div class="js-db-inner">
+        <div class="js-db-left">
+          <div class="js-db-brand">
+            <svg viewBox="0 0 16 18" fill="none" width="11" height="13" aria-hidden="true">
+              <rect x="1" y="2" width="14" height="2" rx="1" fill="rgba(17,30,92,0.7)"/>
+              <rect x="2" y="6" width="12" height="2" rx="1" fill="rgba(17,30,92,0.45)"/>
+              <rect x="3" y="10" width="10" height="2" rx="1" fill="rgba(17,30,92,0.2)"/>
+              <circle cx="8" cy="15.2" r="2" fill="#3b82f6"/>
+              <circle cx="8" cy="15.2" r=".85" fill="white"/>
+            </svg>
+            <span class="js-db-brand-name">JobSift</span>
+          </div>
+          <span class="js-db-dot js-db-dot--loading"></span>
+          <span class="js-db-loading-text">Scoring this job…</span>
+        </div>
+      </div>`;
+
+    // insertBefore with firstChild puts it above everything — job title, company,
+    // apply buttons, and the "About the job" section all appear below the banner.
+    lazyCol.insertBefore(banner, lazyCol.firstChild);
+    _detailBanner = banner;
+    return banner;
+  }
+
+  function updateDetailBanner(result, jobData) {
+    const banner = _detailBanner || document.getElementById('js-detail-banner');
+    if (!banner) return;
+
+    const label    = result.label || 'gray';
+    const hasScore = result.score !== null && result.score !== undefined;
+    const scoreText = hasScore ? `${result.score}%` : '—';
+    const ariaLabel = hasScore
+      ? `JobSift: ${result.score}% match — ${result.text || ''}`
+      : 'JobSift: Complete your profile to score this job';
+
+    banner.className = `js-detail-banner js-detail-banner--${label}`;
+    banner.setAttribute('aria-label', ariaLabel);
+
+    banner.innerHTML = `
+      <div class="js-db-inner">
+        <div class="js-db-left">
+          <div class="js-db-brand">
+            <svg viewBox="0 0 16 18" fill="none" width="11" height="13" aria-hidden="true">
+              <rect x="1" y="2" width="14" height="2" rx="1" fill="rgba(17,30,92,0.7)"/>
+              <rect x="2" y="6" width="12" height="2" rx="1" fill="rgba(17,30,92,0.45)"/>
+              <rect x="3" y="10" width="10" height="2" rx="1" fill="rgba(17,30,92,0.2)"/>
+              <circle cx="8" cy="15.2" r="2" fill="#3b82f6"/>
+              <circle cx="8" cy="15.2" r=".85" fill="white"/>
+            </svg>
+            <span class="js-db-brand-name">JobSift</span>
+          </div>
+          <div class="js-db-score-wrap">
+            <span class="js-db-dot js-db-dot--${label}"></span>
+            <span class="js-db-score js-db-score--${label}">${scoreText}</span>
+            <span class="js-db-match-text">${_escBanner(result.text || '')}</span>
+          </div>
+          ${result.verdict
+            ? `<span class="js-db-verdict">${_escBanner(result.verdict)}</span>`
+            : ''}
+          <span class="js-db-basis">Based on full description</span>
+        </div>
+        <button class="js-db-analysis-btn" type="button">
+          View full analysis →
+        </button>
+      </div>`;
+
+    // Wire "View full analysis" button → opens the panel
+    const btn = banner.querySelector('.js-db-analysis-btn');
+    if (btn) {
+      btn.addEventListener('click', e => {
+        e.preventDefault();
+        e.stopPropagation();
+        // One panel at a time — hidePanel() runs inside togglePanel() if needed.
+        // Panel is anchored to the dedicated root div immediately below the banner.
+        const panelRoot = getOrCreateDetailPanelRoot();
+        if (panelRoot) {
+          window.togglePanel(btn, panelRoot, result, jobData);
+        }
+      });
+    }
+
+    _detailBanner = banner;
+  }
+
+  // Creates (or returns) a dedicated anchor div for the panel on detail pages.
+  // Sits immediately below the banner so the panel opens in context.
+  function getOrCreateDetailPanelRoot() {
+    let root = document.getElementById('js-detail-panel-root');
+    if (root && document.contains(root)) return root;
+
+    root = document.createElement('div');
+    root.id = 'js-detail-panel-root';
+
+    const banner = document.getElementById('js-detail-banner');
+    if (banner?.parentNode) {
+      banner.parentNode.insertBefore(root, banner.nextSibling);
+    }
+    return root;
+  }
+
+  function removeDetailBanner() {
+    // Close any open panel first so it isn't left orphaned in the DOM
+    window.hidePanel?.();
+
+    const banner = document.getElementById('js-detail-banner');
+    if (banner) banner.remove();
+
+    const panelRoot = document.getElementById('js-detail-panel-root');
+    if (panelRoot) panelRoot.remove();
+
+    _detailBanner = null;
+  }
+
+  // Simple HTML escaper for banner text content (AI-generated strings)
+  function _escBanner(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // ── Exports ────────────────────────────────────────────────────────────────
+  window.injectLoadingBadge        = injectLoadingBadge;
+  window.updateBadgeWithResult     = updateBadgeWithResult;
+  window.injectFilterBar           = injectFilterBar;
+  window.refreshFilterBar          = refreshFilterBar;
+  window.applyJobFilter            = applyJobFilter;
+  window.resetFilter               = resetFilter;
+  window.injectDetailBanner        = injectDetailBanner;
+  window.updateDetailBanner        = updateDetailBanner;
+  window.removeDetailBanner        = removeDetailBanner;
+  window.getOrCreateDetailPanelRoot = getOrCreateDetailPanelRoot;
 
 }());

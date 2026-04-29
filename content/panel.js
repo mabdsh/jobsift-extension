@@ -1,4 +1,6 @@
-// JobSift Panel v3.1.0
+// JobSift Panel v3.2.0
+// v3.2.0: anchor parameter replaces li — panel now works on any container element,
+//         enabling detail page support where the anchor is a dedicated panel-root div.
 // Layout: SVG arc ring → verdict → decision block → quick-facts →
 //         AI analysis → criteria breakdown → tips → footer
 
@@ -12,7 +14,6 @@
   let _escKey   = null;
   let _checking = false;
 
-  // SVG arc circumference for r=26: 2π×26 ≈ 163.36
   const CIRC = 163.36;
 
   // ── Helpers ────────────────────────────────────────────────────────────────
@@ -41,8 +42,6 @@
   }
 
   // ── SVG arc ring ───────────────────────────────────────────────────────────
-  // Builds the circular progress ring. The arc fills proportionally to score.
-  // dashoffset = CIRC × (1 − score/100) → full arc at 100, empty at 0.
   function buildRing(label, score) {
     const hasScore = score !== null && score !== undefined;
     const offset   = hasScore ? CIRC * (1 - score / 100) : CIRC;
@@ -63,8 +62,6 @@
   }
 
   // ── Decision block ─────────────────────────────────────────────────────────
-  // The most prominent element after the score — tells the user what to do.
-  // Replaces the old tiny recommendation pill.
   function buildDecision(result) {
     const score    = result.score;
     const hasScore = score !== null && score !== undefined;
@@ -108,12 +105,9 @@
   }
 
   // ── Quick-facts bar ────────────────────────────────────────────────────────
-  // At-a-glance row showing work type, salary, and experience requirement.
-  // Uses extracted jobData fields so it's available before AI loads.
   function buildQuickFacts(jobData, result) {
     const facts = [];
 
-    // Work type
     const wtIcons  = { remote: '🏠', hybrid: '🔄', onsite: '🏢' };
     const wtLabels = { remote: 'Remote', hybrid: 'Hybrid', onsite: 'On-site' };
     if (jobData.workType) {
@@ -124,7 +118,6 @@
       });
     }
 
-    // Salary — show range if available
     if (jobData.salary?.low != null) {
       facts.push({
         icon:  '💰',
@@ -133,10 +126,8 @@
       });
     }
 
-    // Experience — extracted from the seniority criterion note
     const expCrit = result.criteria?.find(c => c.name === 'Experience fit');
     if (expCrit && expCrit.status !== 'unknown' && expCrit.note) {
-      // Match patterns like "Senior (4–10 yrs)" or "4-10 yrs"
       const match = expCrit.note.match(/\(([^)]+yrs?)\)/i)
                  || expCrit.note.match(/(\d+[–\-–]+\d+\s*yrs?)/i);
       if (match) {
@@ -336,15 +327,6 @@
   }
 
   // ── Normal scoring panel ───────────────────────────────────────────────────
-  // New section order:
-  //   1. Header (SVG arc ring + match text + close)
-  //   2. Verdict line (colored, specific)
-  //   3. Decision block (prominent apply/skip CTA)
-  //   4. Quick-facts bar (work type · salary · experience)
-  //   5. AI section (loads async — moved above criteria)
-  //   6. Criteria breakdown (moved below AI)
-  //   7. Resume tips
-  //   8. Footer (usage count for free users)
   function createPanel(result, jobData, panelCheckResult) {
     const label    = result.label || 'gray';
     const score    = result.score;
@@ -353,7 +335,7 @@
     const panel = document.createElement('div');
     panel.className = `js-panel js-panel--${label}`;
 
-    // ── 1. Header ─────────────────────────────────────────────────────────────
+    // 1. Header
     const hdr = document.createElement('div');
     hdr.className = 'js-panel-hdr';
 
@@ -376,7 +358,7 @@
     hdr.append(ring, meta, makeCloseBtn());
     panel.appendChild(hdr);
 
-    // ── 2. Verdict line ────────────────────────────────────────────────────────
+    // 2. Verdict line
     if (result.verdict) {
       const verdictEl = document.createElement('div');
       verdictEl.className = `js-verdict-line js-verdict-line--${label}`;
@@ -384,14 +366,14 @@
       panel.appendChild(verdictEl);
     }
 
-    // ── 3. Decision block ──────────────────────────────────────────────────────
+    // 3. Decision block
     panel.appendChild(buildDecision(result));
 
-    // ── 4. Quick-facts bar ─────────────────────────────────────────────────────
+    // 4. Quick-facts bar
     const qf = buildQuickFacts(jobData, result);
     if (qf) panel.appendChild(qf);
 
-    // ── 5. AI section (placeholder — ai-analyzer fills this async) ─────────────
+    // 5. AI section placeholder (ai-analyzer fills this async)
     const aiSection = document.createElement('div');
     aiSection.className = 'js-ai-section';
     aiSection.innerHTML = `<div class="js-ai-hdr">
@@ -401,7 +383,7 @@
     </div>`;
     panel.appendChild(aiSection);
 
-    // ── 6. Criteria breakdown ──────────────────────────────────────────────────
+    // 6. Criteria breakdown
     if (result.criteria?.length) {
       const section = document.createElement('div');
       section.className = 'js-criteria';
@@ -413,7 +395,7 @@
       panel.appendChild(section);
     }
 
-    // ── 7. Resume tips ─────────────────────────────────────────────────────────
+    // 7. Resume tips
     if (result.tips?.length) {
       const tips = document.createElement('div');
       tips.className = 'js-tips';
@@ -433,7 +415,7 @@
       panel.appendChild(tips);
     }
 
-    // ── 8. Footer ──────────────────────────────────────────────────────────────
+    // 8. Footer
     const footer = document.createElement('div');
     footer.className = 'js-panel-footer';
     footer.innerHTML = _buildFooterHTML(panelCheckResult);
@@ -443,12 +425,13 @@
   }
 
   // ── Show / hide ────────────────────────────────────────────────────────────
-  function showPanel(li, result, jobData, panelCheckResult) {
+  // anchor: any DOM element — li on search page, #js-detail-panel-root on detail page.
+  function showPanel(anchor, result, jobData, panelCheckResult) {
     hidePanel();
     const panel = result.limitReached
       ? createLimitPanel(result)
       : createPanel(result, jobData, panelCheckResult);
-    li.appendChild(panel);
+    anchor.appendChild(panel);
     requestAnimationFrame(() => requestAnimationFrame(() => panel.classList.add('js-panel--visible')));
     _panel  = panel;
     _escKey = e => { if (e.key === 'Escape') hidePanel(); };
@@ -466,15 +449,18 @@
   }
 
   // ── Toggle — check-first flow ──────────────────────────────────────────────
-  async function togglePanel(badge, li, result, jobData) {
+  // badge:  the clicked element (js-badge on search page, .js-db-analysis-btn on detail)
+  // anchor: where to append the panel (li on search, #js-detail-panel-root on detail)
+  async function togglePanel(badge, anchor, result, jobData) {
+    // Same badge clicked again → close the panel
     if (_panel && _badge === badge) { hidePanel(); return; }
     if (_checking) return;
     _checking = true;
 
     if (_badge) _badge.classList.remove('js-badge--active');
 
-    // Loading state: replace score text with ellipsis while API check is in flight
-    const scoreEl       = badge.querySelector('.js-badge-score');
+    // Show a loading indicator in the trigger element while the gate checks
+    const scoreEl       = badge.querySelector?.('.js-badge-score') ?? null;
     const originalScore = scoreEl ? scoreEl.textContent : null;
     if (scoreEl) scoreEl.textContent = '…';
 
@@ -501,7 +487,7 @@
     badge.classList.add('js-badge--active');
 
     if (!panelCheckResult.allowed) {
-      showPanel(li, {
+      showPanel(anchor, {
         ...result,
         limitReached: true,
         resetAt:   panelCheckResult.resetAt  || null,
@@ -511,10 +497,10 @@
       return;
     }
 
-    showPanel(li, result, jobData, panelCheckResult);
+    showPanel(anchor, result, jobData, panelCheckResult);
 
     if (_panel && typeof window._jobsiftOnPanelOpen === 'function') {
-      window._jobsiftOnPanelOpen(jobData, _panel, li);
+      window._jobsiftOnPanelOpen(jobData, _panel, anchor);
     }
   }
 
