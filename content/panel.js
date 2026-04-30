@@ -1,4 +1,6 @@
-// Rolevance Panel v5.0
+// Rolevance Panel v5.2
+// v5.2: Full panel redesign — decision leads header, simplified criteria,
+//       collapsible breakdown, visual AI section differentiation, pull-quote insight
 // v3.2.0: anchor parameter replaces li — panel now works on any container element,
 //         enabling detail page support where the anchor is a dedicated panel-root div.
 // Layout: SVG arc ring → verdict → decision block → quick-facts →
@@ -14,7 +16,7 @@
   let _escKey   = null;
   let _checking = false;
 
-  const CIRC = 163.36;
+  // CIRC removed — circular ring replaced by buildScoreTile()
 
   // ── Helpers ────────────────────────────────────────────────────────────────
   function timeUntilReset(resetAt) {
@@ -89,23 +91,17 @@
   }
 
   // ── SVG arc ring ───────────────────────────────────────────────────────────
-  function buildRing(label, score) {
+  // Score tile — 48×48 rounded square, consistent with tracker card design system.
+  // Replaces the circular ring which was visually inconsistent and too small
+  // to carry meaning at 52px once demoted from hero to supporting role.
+  function buildScoreTile(label, score) {
     const hasScore = score !== null && score !== undefined;
-    const offset   = hasScore ? CIRC * (1 - score / 100) : CIRC;
-
-    const wrap = document.createElement('div');
-    wrap.className = 'js-ring-wrap';
-    wrap.innerHTML = `
-      <svg class="js-ring-svg" viewBox="0 0 64 64" width="64" height="64" aria-hidden="true">
-        <circle class="js-ring-track" cx="32" cy="32" r="26"/>
-        <circle class="js-ring-arc js-ring-arc--${label}" cx="32" cy="32" r="26"
-          stroke-dasharray="${CIRC}" stroke-dashoffset="${offset}"/>
-      </svg>
-      <div class="js-ring-inner">
-        <span class="js-ring-num js-ring-num--${label}">${hasScore ? score : '—'}</span>
-        <span class="js-ring-sub">${hasScore ? '/100' : 'no data'}</span>
-      </div>`;
-    return wrap;
+    const tile = document.createElement('div');
+    tile.className = `js-score-tile js-score-tile--${label}`;
+    tile.innerHTML =
+      `<span class="js-score-tile-num">${hasScore ? score : '—'}</span>` +
+      `<span class="js-score-tile-sub">${hasScore ? '/100' : ''}</span>`;
+    return tile;
   }
 
   // ── Decision block ─────────────────────────────────────────────────────────
@@ -190,12 +186,9 @@
     facts.forEach(f => {
       const item = document.createElement('div');
       item.className = 'js-quick-fact';
-      item.innerHTML = `
-        <span class="js-qf-icon">${f.icon}</span>
-        <div class="js-qf-info">
-          <span class="js-qf-label">${f.label}</span>
-          <span class="js-qf-val">${f.val}</span>
-        </div>`;
+      item.innerHTML =
+        `<span class="js-qf-icon">${f.icon}</span>` +
+        `<span class="js-qf-val">${f.val}</span>`;
       bar.appendChild(item);
     });
 
@@ -204,29 +197,29 @@
 
   // ── Criterion row ──────────────────────────────────────────────────────────
   function buildRow(c) {
+    // Simplified: background conveys status, no redundant bar or verdict pill
     const row  = document.createElement('div');
     row.className = `js-crit js-crit--${c.status}`;
-    const bar  = document.createElement('div'); bar.className = 'js-crit-bar';
-    const icon = document.createElement('span'); icon.className = 'js-crit-icon';
-    icon.textContent = { pass:'✓', partial:'~', fail:'✗', unknown:'?' }[c.status] || '?';
-    const body = document.createElement('div'); body.className = 'js-crit-body';
-    const nameRow = document.createElement('div'); nameRow.className = 'js-crit-name-row';
-    const name    = document.createElement('span'); name.className = 'js-crit-name';
+
+    const icon = document.createElement('span');
+    icon.className = 'js-crit-icon';
+    icon.textContent = { pass: '✓', partial: '~', fail: '✗', unknown: '·' }[c.status] || '·';
+
+    const body = document.createElement('div');
+    body.className = 'js-crit-body';
+
+    const name = document.createElement('div');
+    name.className = 'js-crit-name';
     name.textContent = c.name;
-    nameRow.appendChild(name);
-    if (c.verdict) {
-      const v = document.createElement('span');
-      v.className = `js-verdict js-verdict--${c.status}`;
-      v.textContent = c.verdict;
-      nameRow.appendChild(v);
-    }
-    body.appendChild(nameRow);
+    body.appendChild(name);
+
     if (c.note) {
       const note = document.createElement('div');
       note.className = 'js-crit-note';
       note.textContent = c.note;
       body.appendChild(note);
     }
+
     if (c.matched?.length || c.missing?.length) {
       const chips = document.createElement('div');
       chips.className = 'js-chips';
@@ -234,34 +227,34 @@
         const chip = document.createElement('span');
         chip.className = `js-chip ${m.inTitle ? 'js-chip--title' : 'js-chip--match'}`;
         chip.textContent = m.kw || m;
-        chip.title = m.inTitle ? 'Found in job title — strong signal'
-          : m.via ? `Matched via "${m.via}"` : 'Found in listing';
         chips.appendChild(chip);
       });
       (c.missing || []).forEach(kw => {
         const chip = document.createElement('span');
         chip.className = 'js-chip js-chip--miss';
         chip.textContent = kw;
-        chip.title = 'Not mentioned in listing';
         chips.appendChild(chip);
       });
       body.appendChild(chips);
     }
-    row.append(bar, icon, body);
+
+    row.append(icon, body);
     return row;
   }
 
   // ── Footer text ────────────────────────────────────────────────────────────
   function _buildFooterHTML(pcr) {
-    if (!pcr) return '<strong>Rolevance</strong> · AI analysis loads when you open the full job';
+    if (!pcr || !pcr.trial && pcr.limit === null) {
+      return '<strong>Rolevance</strong> · Pro';
+    }
     if (pcr.trial && pcr.trialDaysLeft !== null) {
-      return `<strong>Rolevance</strong> · Trial · ${pcr.trialDaysLeft} day${pcr.trialDaysLeft !== 1 ? 's' : ''} remaining`;
+      return `<strong>Rolevance</strong> · Trial · ${pcr.trialDaysLeft}d remaining`;
     }
-    if (!pcr.trial && pcr.limit !== null) {
-      const remaining = pcr.limit - (pcr.usedToday || 0);
-      return `<strong>Rolevance</strong> · ${pcr.usedToday || 0} of ${pcr.limit} panels used today · ${remaining} remaining`;
+    if (pcr.limit !== null) {
+      const remaining = Math.max(0, pcr.limit - (pcr.usedToday || 0));
+      return `<strong>Rolevance</strong> · ${remaining} panel${remaining !== 1 ? 's' : ''} left today`;
     }
-    return '<strong>Rolevance</strong> · AI analysis loads when you open the full job';
+    return '<strong>Rolevance</strong> · Pro';
   }
 
   // ── Limit panel ────────────────────────────────────────────────────────────
@@ -284,7 +277,7 @@
       </div>
       <div class="js-lp-hdr-text">
         <div class="js-lp-title">Daily limit reached</div>
-        <div class="js-lp-sub">You've opened all ${limit} of your free panels today</div>
+        <div class="js-lp-sub">You've used both of your free panels today</div>
       </div>`;
     hdr.appendChild(makeCloseBtn());
     panel.appendChild(hdr);
@@ -314,8 +307,8 @@
           <span class="js-lp-limit-name">profile parses / day</span>
         </div>
         <div class="js-lp-limit-item">
-          <span class="js-lp-limit-num">7</span>
-          <span class="js-lp-limit-name">day free trial</span>
+          <span class="js-lp-limit-num">5</span>
+          <span class="js-lp-limit-name">day free trial included</span>
         </div>
       </div>`;
     panel.appendChild(plan);
@@ -329,7 +322,7 @@
     upgrade.innerHTML = `
       <div class="js-lp-upgrade-hdr">
         <div class="js-lp-upgrade-title">Rolevance Pro</div>
-        <div class="js-lp-upgrade-price">$7<span>/month</span></div>
+        <div class="js-lp-upgrade-price">$9<span>/month</span></div>
       </div>
       <div class="js-lp-features">
         <div class="js-lp-feature">
@@ -357,7 +350,7 @@
 
     const upgradeBtn = document.createElement('button');
     upgradeBtn.className = 'js-lp-upgrade-btn';
-    upgradeBtn.textContent = 'Upgrade to Pro — $7/month';
+    upgradeBtn.textContent = 'Upgrade to Pro — $9/month';
     upgradeBtn.addEventListener('click', e => {
       e.stopPropagation();
       chrome.runtime.sendMessage({ type: 'JS_OPEN_UPGRADE' });
@@ -367,7 +360,7 @@
 
     const footer = document.createElement('div');
     footer.className = 'js-panel-footer js-lp-footer';
-    footer.textContent = 'Rolevance · Free plan · Panels reset at midnight UTC';
+    footer.textContent = 'Rolevance · Free plan';
     panel.appendChild(footer);
 
     return panel;
@@ -382,41 +375,64 @@
     const panel = document.createElement('div');
     panel.className = `js-panel js-panel--${label}`;
 
-    // 1. Header
-    const hdr = document.createElement('div');
-    hdr.className = 'js-panel-hdr';
+    // ── Verdict card — light, readable, structured layout ───────────────────
+    // Layout: [verdict text (flex:1)] [right column: chip / save+close]
+    // No absolute positioning — everything in normal flow so nothing overlaps.
+    const verdictCard = document.createElement('div');
+    verdictCard.className = `js-verdict-card js-verdict-card--${label}`;
 
-    const ring = buildRing(label, score);
+    // Verdict text — score-only, no specific skill claims (AI updates later)
+    let decisionText;
+    if (!hasScore)        decisionText = 'Complete your profile to score';
+    else if (score >= 80) decisionText = 'Apply with confidence';
+    else if (score >= 70) decisionText = 'Strong match — worth applying';
+    else if (score >= 55) decisionText = 'Worth applying';
+    else if (score >= 40) decisionText = 'Stretch role — if compelling';
+    else                  decisionText = 'Likely not a match';
 
-    const meta = document.createElement('div');
-    meta.className = 'js-panel-meta';
+    const vcText = document.createElement('div');
+    vcText.className = `js-verdict-text js-verdict-text--${label}`;
+    vcText.dataset.jsDecisionLead = '1';
+    vcText.textContent = decisionText;
 
-    const matchTxt = document.createElement('div');
-    matchTxt.className = `js-match-txt js-txt--${label}`;
-    matchTxt.textContent = result.text || '—';
+    // Right column: score chip above, buttons below — stacked, no overlap
+    const vcRight = document.createElement('div');
+    vcRight.className = 'js-verdict-right';
 
-    const detail = document.createElement('div');
-    detail.className = 'js-match-detail';
-    detail.textContent = result.total > 0
-      ? `${result.metCount} of ${result.total} criteria met · ${Math.round((result.confidence||0)*100)}% data coverage`
-      : 'Complete your profile for a full score';
-    meta.append(matchTxt, detail);
+    // Score chip with /100 context
+    const vcChip = document.createElement('div');
+    vcChip.className = `js-verdict-chip js-verdict-chip--${label}`;
+    vcChip.innerHTML =
+      `<span class="js-verdict-chip-num">${hasScore ? score : '—'}</span>` +
+      (hasScore ? `<span class="js-verdict-chip-sub">/100</span>` : '');
 
-    hdr.append(ring, meta, makeSaveBtn(jobData, result), makeCloseBtn());
-    panel.appendChild(hdr);
+    // Save + close as a button row
+    const vcBtns = document.createElement('div');
+    vcBtns.className = 'js-verdict-btns';
+    vcBtns.append(makeSaveBtn(jobData, result), makeCloseBtn());
 
-    // 2. Verdict line
-    if (result.verdict) {
-      const verdictEl = document.createElement('div');
-      verdictEl.className = `js-verdict-line js-verdict-line--${label}`;
-      verdictEl.textContent = result.verdict;
-      panel.appendChild(verdictEl);
-    }
+    vcRight.append(vcChip, vcBtns);
 
-    // 3. Decision block
-    panel.appendChild(buildDecision(result));
+    // Main row: text + right column
+    const vcMain = document.createElement('div');
+    vcMain.className = 'js-verdict-main';
+    vcMain.append(vcText, vcRight);
+    verdictCard.appendChild(vcMain);
 
-    // 4. Quick-facts bar
+    // Meta row: job title · company · match label
+    const vcMeta = document.createElement('div');
+    vcMeta.className = 'js-verdict-meta';
+    const ctxParts = [jobData.title, jobData.company].filter(Boolean);
+    const mTxt     = result.text || '';
+    vcMeta.innerHTML =
+      (ctxParts.length ? `<span class="js-verdict-job">${ctxParts.join(' · ')}</span>` : '') +
+      (ctxParts.length && mTxt ? `<span class="js-verdict-sep"> · </span>` : '') +
+      (mTxt ? `<span class="js-verdict-lbl">${mTxt}</span>` : '');
+    verdictCard.appendChild(vcMeta);
+
+    panel.appendChild(verdictCard);
+
+    // 2. Quick-facts bar (moved up — first body element)
     const qf = buildQuickFacts(jobData, result);
     if (qf) panel.appendChild(qf);
 
@@ -430,37 +446,41 @@
     </div>`;
     panel.appendChild(aiSection);
 
-    // 6. Criteria breakdown
+    // 4. Criteria — collapsible, collapsed by default
     if (result.criteria?.length) {
+      const weighted  = result.criteria.filter(c => c.weight > 0);
+      const metCount  = weighted.filter(c => c.status === 'pass').length;
+      const total     = weighted.length;
+
       const section = document.createElement('div');
       section.className = 'js-criteria';
-      const lbl = document.createElement('div');
-      lbl.className = 'js-section-lbl';
-      lbl.textContent = 'Score breakdown';
-      section.appendChild(lbl);
-      result.criteria.filter(c => c.weight > 0).forEach(c => section.appendChild(buildRow(c)));
+
+      const toggle = document.createElement('button');
+      toggle.className = 'js-criteria-toggle';
+      toggle.type = 'button';
+      toggle.innerHTML =
+        `<span class="js-criteria-toggle-lbl">Score breakdown</span>` +
+        `<span class="js-criteria-meta">${metCount} of ${total} criteria met</span>` +
+        `<svg class="js-criteria-chevron" viewBox="0 0 16 16" fill="none" width="12" height="12">` +
+          `<path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>` +
+        `</svg>`;
+
+      const body = document.createElement('div');
+      body.className = 'js-criteria-body';
+
+      toggle.addEventListener('click', e => {
+        e.stopPropagation();
+        const isOpen = toggle.classList.contains('js-criteria-toggle--open');
+        toggle.classList.toggle('js-criteria-toggle--open', !isOpen);
+        body.style.display = isOpen ? 'none' : 'block';
+      });
+
+      weighted.forEach(c => body.appendChild(buildRow(c)));
+      section.append(toggle, body);
       panel.appendChild(section);
     }
 
-    // 7. Resume tips
-    if (result.tips?.length) {
-      const tips = document.createElement('div');
-      tips.className = 'js-tips';
-      const tipsLbl = document.createElement('div');
-      tipsLbl.className = 'js-section-lbl';
-      tipsLbl.textContent = 'Before you apply';
-      tips.appendChild(tipsLbl);
-      result.tips.forEach(tip => {
-        const item  = document.createElement('div');
-        item.className = 'js-tip';
-        const arrow = document.createElement('span');
-        arrow.className = 'js-tip-arrow'; arrow.textContent = '→';
-        const txt   = document.createElement('span'); txt.textContent = tip;
-        item.append(arrow, txt);
-        tips.appendChild(item);
-      });
-      panel.appendChild(tips);
-    }
+    // (Rule-based tips suppressed from panel body — AI analysis provides richer tips)
 
     // 8. Footer
     const footer = document.createElement('div');
@@ -547,7 +567,7 @@
     showPanel(anchor, result, jobData, panelCheckResult);
 
     if (_panel && typeof window._jobsiftOnPanelOpen === 'function') {
-      window._jobsiftOnPanelOpen(jobData, _panel, anchor);
+      window._jobsiftOnPanelOpen(jobData, _panel, anchor, panelCheckResult, result);
     }
   }
 

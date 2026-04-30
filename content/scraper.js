@@ -1,4 +1,4 @@
-// Rolevance Scraper v5.0
+// JobSift Scraper v2.1.0
 // Extracts job data from LinkedIn job cards — /jobs/search/ only.
 // v2.1.0: added isDetailPage() + extractDetailPageData() for /jobs/view/ support.
 
@@ -222,6 +222,24 @@
   }
   function clean(el) { return el ? el.textContent.replace(/\s+/g, ' ').trim() : ''; }
 
+  // cleanTitle avoids the LinkedIn accessibility duplication bug where the title
+  // <a> contains BOTH a visible <strong> and a visually-hidden <span> with the same
+  // text (plus "with verification"), causing textContent to double the title text.
+  // Priority: <strong> text → aria-label first line → full textContent fallback.
+  function cleanTitle(titleEl) {
+    if (!titleEl) return '';
+    const strong = titleEl.querySelector('strong');
+    if (strong?.textContent?.trim()) {
+      return strong.textContent.replace(/\s+/g, ' ').trim();
+    }
+    const ariaLabel = titleEl.getAttribute('aria-label');
+    if (ariaLabel) {
+      // aria-label on LinkedIn title links is "Job Title\nLocation" — take first line only
+      return ariaLabel.split(/[\n\r]/)[0].replace(/\s+/g, ' ').trim();
+    }
+    return titleEl.textContent.replace(/\s+/g, ' ').trim();
+  }
+
   function detectWorkType(text) {
     if (!text) return null;
     const t = text.toLowerCase();
@@ -290,7 +308,7 @@
     try {
       const rawText  = (card.textContent || '').replace(/\s+/g, ' ').trim().slice(0, RAW_TEXT_LIMIT);
       const titleEl  = firstText(card, TITLE_SELECTORS);
-      const title    = clean(titleEl);
+      const title    = cleanTitle(titleEl);
       const jobUrl   = titleEl?.href || '';
       const jobId    = card.dataset.occludableJobId ||
                        card.dataset.jobId           ||

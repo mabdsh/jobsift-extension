@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Rolevance</title>
+  <title>JobSift</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800&display=swap" rel="stylesheet">
@@ -16,11 +16,14 @@
     <div class="brand">
       <div class="brand-mark">
         <svg viewBox="0 0 18 18" fill="none" width="16" height="16">
-          <circle cx="9" cy="9" r="6.5" fill="none" stroke="#6EE7B7" stroke-width="1.3"/>
-          <circle cx="10.4" cy="7.6" r="2.4" fill="#059669"/>
+          <rect x="1"   y="3"    width="16" height="2.4" rx="1.2" fill="rgba(255,255,255,0.92)"/>
+          <rect x="2.5" y="7"    width="13" height="2.4" rx="1.2" fill="rgba(255,255,255,0.58)"/>
+          <rect x="4"   y="11"   width="10" height="2.4" rx="1.2" fill="rgba(255,255,255,0.26)"/>
+          <circle cx="9" cy="16.2" r="2.2" fill="#3b82f6"/>
+          <circle cx="9" cy="16.2" r="1"   fill="white"/>
         </svg>
       </div>
-      <span class="brand-name">Rolevance</span>
+      <span class="brand-name">JobSift</span>
       <span id="proBadge" class="pro-badge" style="display:none">PRO</span>
     </div>
     <div id="statusPill" class="status-pill">Open LinkedIn Jobs</div>
@@ -28,14 +31,12 @@
 
   <!-- ── Tab bar ──────────────────────────────────────────────────────────── -->
   <div class="tab-bar" id="tabBar" role="tablist">
-    <div class="tab-track">
-      <button class="tab-btn tab-btn--active" id="tabProfile"
-              data-tab="profile" role="tab" aria-selected="true">Profile</button>
-      <button class="tab-btn" id="tabTracker"
-              data-tab="tracker" role="tab" aria-selected="false">
-        Tracker<span class="tab-count" id="trackerTabCount"></span>
-      </button>
-    </div>
+    <button class="tab-btn tab-btn--active" id="tabProfile"
+            data-tab="profile" role="tab" aria-selected="true">Profile</button>
+    <button class="tab-btn" id="tabTracker"
+            data-tab="tracker" role="tab" aria-selected="false">
+      Tracker<span class="tab-count" id="trackerTabCount"></span>
+    </button>
   </div>
 
   <!-- ══════════════════════════════════════════════════════════════════════
@@ -43,82 +44,56 @@
        Shown only to new users (empty profile). Replaces the main content
        until the user clicks "Set up" or "Skip". Dismissed in popup.js.
   ══════════════════════════════════════════════════════════════════════ -->
-  <div id="onboarding" class="onboarding" style="display:none" role="main" aria-label="Welcome to Rolevance">
+  <div id="onboarding" class="onboarding" style="display:none" role="main" aria-label="Welcome to JobSift">
 
-    <!-- Mark -->
-    <div class="onb-mark">
-      <svg viewBox="0 0 72 72" fill="none" width="72" height="72">
-        <circle cx="36" cy="36" r="28" fill="none" stroke="#6EE7B7" stroke-width="2.4"/>
-        <circle cx="42" cy="30" r="11" fill="#059669"/>
+    <!-- Brand graphic — large version of the extension icon concept -->
+    <div class="onb-icon-wrap">
+      <svg viewBox="0 0 36 42" fill="none" width="36" height="42">
+        <rect x="1"   y="3"  width="34" height="6"  rx="3" fill="rgba(17,30,92,0.18)"/>
+        <rect x="3"   y="13" width="30" height="6"  rx="3" fill="rgba(17,30,92,0.12)"/>
+        <rect x="5"   y="23" width="26" height="6"  rx="3" fill="rgba(17,30,92,0.07)"/>
+        <circle cx="18" cy="36.5" r="5.5" fill="#3b82f6"/>
+        <circle cx="18" cy="36.5" r="2.5" fill="white"/>
       </svg>
     </div>
 
-    <!-- Headline -->
-    <h1 class="onb-title">Find roles that actually fit</h1>
-    <p class="onb-desc">Rolevance scores every LinkedIn and Indeed listing against your profile — instantly, as you browse.</p>
+    <h1 class="onb-title">Score every job in seconds</h1>
+    <p class="onb-desc">Tell JobSift what you're looking for — it scores every LinkedIn listing against your profile automatically.</p>
 
-    <!-- Steps -->
+    <!-- 3 steps -->
     <div class="onb-steps">
+
       <div class="onb-step">
-        <div class="onb-step-icon">
-          <svg viewBox="0 0 16 16" fill="none" width="14" height="14">
-            <rect x="2" y="2" width="12" height="12" rx="2" stroke="#059669" stroke-width="1.4"/>
-            <path d="M5 8h6M5 5.5h4M5 10.5h3" stroke="#059669" stroke-width="1.3" stroke-linecap="round"/>
-          </svg>
-        </div>
+        <div class="onb-num">1</div>
         <div class="onb-step-body">
-          <div class="onb-step-title">Paste your CV or bio</div>
-          <div class="onb-step-sub">AI fills every field in seconds</div>
+          <div class="onb-step-title">Paste your CV or LinkedIn bio</div>
+          <div class="onb-step-sub">AI fills your profile in seconds</div>
         </div>
       </div>
+
       <div class="onb-step">
-        <div class="onb-step-icon">
-          <svg viewBox="0 0 16 16" fill="none" width="14" height="14">
-            <circle cx="8" cy="8" r="5.5" stroke="#059669" stroke-width="1.4"/>
-            <path d="M8 5.5v2.8l1.8 1.8" stroke="#059669" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </div>
+        <div class="onb-num">2</div>
         <div class="onb-step-body">
-          <div class="onb-step-title">Review in 2 minutes</div>
-          <div class="onb-step-sub">Tune skills, salary &amp; deal-breakers</div>
+          <div class="onb-step-title">Review your skills &amp; preferences</div>
+          <div class="onb-step-sub">Takes about 2 minutes to complete</div>
         </div>
       </div>
+
       <div class="onb-step">
-        <div class="onb-step-icon">
-          <svg viewBox="0 0 16 16" fill="none" width="14" height="14">
-            <path d="M3 8.5l3 3 7-7" stroke="#059669" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </div>
+        <div class="onb-num">3</div>
         <div class="onb-step-body">
-          <div class="onb-step-title">Scores appear on every listing</div>
-          <div class="onb-step-sub">LinkedIn Jobs and Indeed — both covered</div>
+          <div class="onb-step-title">Open LinkedIn Jobs</div>
+          <div class="onb-step-sub">Match scores appear on every listing</div>
         </div>
       </div>
+
     </div>
 
     <button id="onbStartBtn" class="onb-cta">Set up my profile →</button>
-    <button id="onbSkipBtn"  class="onb-skip">I’ll explore first</button>
+    <button id="onbSkipBtn"  class="onb-skip">I'll explore first</button>
 
-    <!-- Quick-open links -->
-    <div class="onb-links">
-      <a class="onb-link" href="https://www.linkedin.com/jobs/" target="_blank" rel="noopener">
-        <svg viewBox="0 0 16 16" fill="none" width="12" height="12">
-          <rect x="1" y="1" width="14" height="14" rx="2.5" fill="#0A66C2"/>
-          <path d="M4.5 6.5v5M4.5 4.2v.6M7 6.5v5M7 8.5c0-1 .7-2 2-2s2 1 2 2v2.5" stroke="#fff" stroke-width="1.2" stroke-linecap="round"/>
-        </svg>
-        LinkedIn Jobs
-      </a>
-      <span class="onb-links-div"></span>
-      <a class="onb-link" href="https://www.indeed.com/jobs" target="_blank" rel="noopener">
-        <svg viewBox="0 0 16 16" fill="none" width="12" height="12">
-          <rect x="1" y="1" width="14" height="14" rx="2.5" fill="#003A9B"/>
-          <path d="M5.5 8a2.5 2.5 0 105 0 2.5 2.5 0 00-5 0zM9.5 11l1.5 1.5" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/>
-        </svg>
-        Indeed
-      </a>
-    </div>
-
-  </div><!-- /onboarding -->
+  </div>
+  <!-- /onboarding -->
 
   <!-- ══════════════════════════════════════════════════════════════════════
        MAIN CONTENT
@@ -128,13 +103,13 @@
   <div id="mainContent" style="display:contents">
 
     <!-- Scroll area -->
-    <div class="scroll-area" id="scrollArea">
+    <div class="scroll-area">
 
       <!-- ── Profile section ────────────────────────────────────────────── -->
       <div class="acc-section open" id="acc-profile">
         <button class="acc-header" type="button">
           <div class="acc-header-left">
-            <div class="acc-icon acc-icon--green">
+            <div class="acc-icon acc-icon--blue">
               <svg viewBox="0 0 16 16" fill="none" width="12" height="12">
                 <circle cx="8" cy="5" r="3" stroke="currentColor" stroke-width="1.5"/>
                 <path d="M2 14c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
@@ -238,7 +213,7 @@
                   Saved
                 </span>
               </div>
-              <p class="field-hint">Restore access after reinstall or device change</p>
+              <p class="field-hint">Get notified before your trial ends · Restore access after reinstall</p>
             </div>
 
           </div>
@@ -371,11 +346,10 @@
       <div class="upgrade-banner">
         <div class="upgrade-info">
           <div class="upgrade-title">Upgrade to Pro</div>
-          <div class="upgrade-limits">Unlimited panels · Full AI analysis · Cancel anytime</div>
+          <div class="upgrade-limits">2 panels · no AI → unlimited coaching · 5-day trial</div>
         </div>
-        <button class="upgrade-cta" id="upgradeBtn">$7/mo →</button>
+        <button class="upgrade-cta" id="upgradeBtn">$9/mo →</button>
       </div>
-      <div class="upgrade-proof">🔒 Early access · founding member rate</div>
       <div class="restore-area">
         <button class="restore-toggle-btn" id="restoreToggleBtn" type="button">Already subscribed? Restore access</button>
         <div id="restoreForm" style="display:none">
@@ -413,74 +387,14 @@
       <div class="progress-row">
         <div class="progress-meta">
           <span class="progress-lbl" id="progressLbl">Complete your profile</span>
-          <span class="autosave-status" id="autoSaveStatus"></span>
+          <div id="completenessGuide" class="guide"></div>
         </div>
         <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
       </div>
       <div id="saveToast" class="save-toast save-toast--hidden" role="alert" aria-live="polite">
-        ✓ Saved — jobs will rescore shortly
+        ✓ Saved — LinkedIn jobs will rescore shortly
       </div>
     </footer>
-
-    <!-- ── Dashboard ───────────────────────────────────────────────────────
-         Shown to returning users on popup open. Hides when user clicks
-         "Configure profile" — scroll-area (accordion) is shown instead.
-    ─────────────────────────────────────────────────────────────────────── -->
-    <div id="dashboard" class="dashboard" style="display:none">
-
-      <!-- Completeness ring -->
-      <div class="dash-ring-wrap">
-        <svg class="dash-ring-svg" viewBox="0 0 104 104" width="96" height="96">
-          <circle cx="52" cy="52" r="42" fill="none" stroke="#D0E8DC" stroke-width="7"/>
-          <circle id="dashRingArc" cx="52" cy="52" r="42" fill="none"
-                  stroke="#059669" stroke-width="7" stroke-linecap="round"
-                  stroke-dasharray="263.9" stroke-dashoffset="263.9"
-                  transform="rotate(-90 52 52)"/>
-          <text id="dashPct" x="52" y="58" text-anchor="middle"
-                style="font-size:19px;font-weight:800;fill:#0A1A12;font-family:-apple-system,BlinkMacSystemFont,'DM Sans',sans-serif;letter-spacing:-0.5px">
-            0%
-          </text>
-        </svg>
-        <p class="dash-ring-lbl" id="dashRingLbl">Profile completeness</p>
-      </div>
-
-      <!-- Today's activity stats -->
-      <div class="dash-stats" id="dashStats"></div>
-
-      <!-- Subscription status -->
-      <div class="dash-status" id="dashStatus"></div>
-
-      <!-- Missing fields -->
-      <div class="dash-missing" id="dashMissing"></div>
-
-      <!-- Quick-open links -->
-      <div class="dash-links">
-        <a class="dash-link dash-link--li" href="https://www.linkedin.com/jobs/"
-           target="_blank" rel="noopener">
-          <svg viewBox="0 0 14 14" width="13" height="13" fill="none">
-            <rect width="14" height="14" rx="2.5" fill="#0A66C2"/>
-            <path d="M4 5.5v5M4 3.5v.5M7 10.5V8a2 2 0 014 0v2.5M7 5.5v5"
-                  stroke="#fff" stroke-width="1.2" stroke-linecap="round"/>
-          </svg>
-          LinkedIn Jobs
-        </a>
-        <a class="dash-link dash-link--in" href="https://www.indeed.com/jobs"
-           target="_blank" rel="noopener">
-          <svg viewBox="0 0 14 14" width="13" height="13" fill="none">
-            <rect width="14" height="14" rx="2.5" fill="#2164F3"/>
-            <text x="7" y="10.5" text-anchor="middle"
-                  style="font-size:8.5px;font-weight:800;fill:#fff;font-family:sans-serif">in</text>
-          </svg>
-          Indeed Jobs
-        </a>
-      </div>
-
-      <!-- Edit profile CTA -->
-      <button class="dash-edit-btn" id="dashEditBtn" type="button">
-        Configure profile →
-      </button>
-
-    </div><!-- /dashboard -->
 
   </div><!-- /mainContent -->
 

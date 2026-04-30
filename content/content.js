@@ -447,9 +447,69 @@
   }
 
   // ── AI panel hook ──────────────────────────────────────────────────────────
-  window._jobsiftOnPanelOpen = function (jobData, panelEl, anchor) {
+  // Before triggering AI analysis, ensure the clicked job is loaded in the
+  // LinkedIn right pane. On the two-pane search layout, getFullDescription()
+  // reads from the right pane DOM — if the user clicks a badge without first
+  // clicking the job card, the pane still shows the previously active job's
+  // description. This fix silently clicks the correct card and waits for the
+  // pane to update before handing off to analyzeJobDeep.
+  // Indeed is excluded — its panel reads card data directly, not the right pane.
+
+  async function _ensureLinkedInJobLoaded(jobId) {
+    if (!jobId || isIndeedPage()) return;
+
+    // Read which job LinkedIn currently has active in the right pane.
+    // The active card carries both aria-current="page" and the
+    // jobs-search-results-list__list-item--active class (seen in DOM snapshot).
+    const activeEl  = document.querySelector(
+      '.jobs-search-results-list__list-item--active [data-job-id],' +
+      '[data-job-id][aria-current="page"]'
+    );
+    const activeId  = activeEl?.dataset?.jobId
+                   || activeEl?.closest('[data-job-id]')?.dataset?.jobId;
+
+    if (String(activeId) === String(jobId)) return; // already loaded — nothing to do
+
+    // Find the job card link for the target job and click it silently.
+    // LinkedIn loads the right pane via AJAX when any card link is clicked.
+    const link = document.querySelector(
+      `[data-occludable-job-id="${jobId}"] a.job-card-container__link,` +
+      `[data-job-id="${jobId}"] a.job-card-container__link`
+    );
+
+    if (!link) return; // card not in DOM (occluded/not rendered) — proceed anyway
+
+    link.click();
+
+    // Poll until LinkedIn marks the target job as active in the list
+    // (aria-current="page" moves to the newly clicked card).
+    // Max wait: 3 seconds in 150ms steps.
+    const deadline = Date.now() + 3000;
+    while (Date.now() < deadline) {
+      await new Promise(r => setTimeout(r, 150));
+      const nowActive = document.querySelector(
+        '.jobs-search-results-list__list-item--active [data-job-id],' +
+        '[data-job-id][aria-current="page"]'
+      );
+      const nowId = nowActive?.dataset?.jobId
+                 || nowActive?.closest('[data-job-id]')?.dataset?.jobId;
+      if (String(nowId) === String(jobId)) {
+        // Job is now active — wait one more tick for description HTML to render
+        await new Promise(r => setTimeout(r, 400));
+        break;
+      }
+    }
+  }
+
+  // panelCheckResult: { allowed, trial, limit, usedToday, resetAt }
+  //   limit === null  → Pro / Trial (unlimited)
+  //   limit !== null  → Free (capped) — ai-analyzer shows upgrade teaser
+  // result: the rule-based scoring result — used to personalise the teaser
+  window._jobsiftOnPanelOpen = async function (jobData, panelEl, anchor, panelCheckResult, result) {
+    await _ensureLinkedInJobLoaded(jobData.jobId);
+
     if (typeof window.analyzeJobDeep === 'function') {
-      window.analyzeJobDeep(jobData, panelEl, anchor, _prefs);
+      window.analyzeJobDeep(jobData, panelEl, anchor, _prefs, panelCheckResult, result);
     }
   };
 
