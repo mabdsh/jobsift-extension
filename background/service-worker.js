@@ -1,4 +1,4 @@
-// JobSift Service Worker v3.5.0 — direct LemonSqueezy checkout
+// Rolevance Service Worker v5.0 — direct LemonSqueezy checkout
 
 'use strict';
 
@@ -43,7 +43,7 @@ chrome.runtime.onInstalled.addListener(async ({ reason }) => {
   }
   if (configWarnings.length > 0) {
     console.warn(
-      '[JobSift] ⚠ Configuration placeholders detected:\n' +
+      '[Rolevance] ⚠ Configuration placeholders detected:\n' +
       configWarnings.map(w => '  • ' + w).join('\n')
     );
   }

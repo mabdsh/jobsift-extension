@@ -1,4 +1,4 @@
-// JobSift Injector v2.8.0
+// Rolevance Injector v5.0
 // v2.8.0: detail page banner — injectDetailBanner(), updateDetailBanner(),
 //         removeDetailBanner(), getOrCreateDetailPanelRoot()
 // v2.7.0: persistent count cache — survives LinkedIn's virtual scroll DOM mutations.
@@ -27,7 +27,7 @@
     const badge = document.createElement('span');
     badge.className = 'js-badge js-badge--loading';
     badge.setAttribute('role', 'img');
-    badge.setAttribute('aria-label', 'JobSift: scoring…');
+    badge.setAttribute('aria-label', 'Rolevance: scoring…');
     const dot  = document.createElement('span'); dot.className = 'js-dot';
     const dots = document.createElement('span'); dots.className = 'js-badge-dots';
     dots.innerHTML = '<span></span><span></span><span></span>';
@@ -83,8 +83,8 @@
     const hasScore  = result.score !== null && result.score !== undefined;
     const scoreText = hasScore ? `${result.score}%` : '—';
     const ariaText  = hasScore
-      ? `JobSift: ${result.score}% match — ${result.text || ''}`
-      : `JobSift: ${result.text || 'Set up your profile to score jobs'}`;
+      ? `Rolevance: ${result.score}% match — ${result.text || ''}`
+      : `Rolevance: ${result.text || 'Set up your profile to score jobs'}`;
 
     const badge = document.createElement('span');
     badge.className = `js-badge js-badge--${safeLabel}`;
@@ -139,19 +139,16 @@
     brand.innerHTML = `
       <div style="
         width:24px;height:24px;border-radius:6px;
-        background:linear-gradient(135deg,#111e5c,#0a1438);
+        background:linear-gradient(135deg,#163526,#1F4A35);
         display:flex;align-items:center;justify-content:center;flex-shrink:0;
-        box-shadow:0 1px 4px rgba(10,20,56,0.3);
+        box-shadow:0 1px 4px rgba(5,50,20,0.3);
       ">
         <svg viewBox="0 0 16 18" fill="none" width="11" height="13">
-          <rect x="1"   y="2"    width="14" height="2"   rx="1" fill="rgba(255,255,255,0.92)"/>
-          <rect x="2"   y="6"    width="12" height="2"   rx="1" fill="rgba(255,255,255,0.55)"/>
-          <rect x="3"   y="10"   width="10" height="2"   rx="1" fill="rgba(255,255,255,0.22)"/>
-          <circle cx="8" cy="15.2" r="2"    fill="#3b82f6"/>
-          <circle cx="8" cy="15.2" r=".85"  fill="white"/>
+          <circle cx="8" cy="9" r="6" fill="none" stroke="#6EE7B7" stroke-width="1.3"/>
+          <circle cx="9.5" cy="7.5" r="2.2" fill="#059669"/>
         </svg>
       </div>
-      <span>JobSift</span>`;
+      <span>Rolevance</span>`;
 
     const divider = document.createElement('div');
     divider.className = 'js-fb-divider';
@@ -242,7 +239,7 @@
 
   // ── Detail page banner ─────────────────────────────────────────────────────
   // A full-width banner injected above the "About the job" section on detail
-  // pages. Shows the JobSift score + a "View full analysis →" button that
+  // pages. Shows the Rolevance score + a "View full analysis →" button that
   // opens the standard panel.
   //
   // Injection point: [data-sdui-component*="aboutTheJob"] parent — stable
@@ -265,7 +262,7 @@
     banner.id = 'js-detail-banner';
     banner.className = 'js-detail-banner js-detail-banner--loading';
     banner.setAttribute('role', 'status');
-    banner.setAttribute('aria-label', 'JobSift: scoring this job…');
+    banner.setAttribute('aria-label', 'Rolevance: scoring this job…');
 
     // Loading state — pulse dot + text
     banner.innerHTML = `
@@ -273,13 +270,10 @@
         <div class="js-db-left">
           <div class="js-db-brand">
             <svg viewBox="0 0 16 18" fill="none" width="11" height="13" aria-hidden="true">
-              <rect x="1" y="2" width="14" height="2" rx="1" fill="rgba(17,30,92,0.7)"/>
-              <rect x="2" y="6" width="12" height="2" rx="1" fill="rgba(17,30,92,0.45)"/>
-              <rect x="3" y="10" width="10" height="2" rx="1" fill="rgba(17,30,92,0.2)"/>
-              <circle cx="8" cy="15.2" r="2" fill="#3b82f6"/>
-              <circle cx="8" cy="15.2" r=".85" fill="white"/>
+              <circle cx="8" cy="9" r="6" fill="none" stroke="#059669" stroke-width="1.3"/>
+              <circle cx="9.5" cy="7.5" r="2.2" fill="#059669"/>
             </svg>
-            <span class="js-db-brand-name">JobSift</span>
+            <span class="js-db-brand-name">Rolevance</span>
           </div>
           <span class="js-db-dot js-db-dot--loading"></span>
           <span class="js-db-loading-text">Scoring this job…</span>
@@ -301,8 +295,8 @@
     const hasScore = result.score !== null && result.score !== undefined;
     const scoreText = hasScore ? `${result.score}%` : '—';
     const ariaLabel = hasScore
-      ? `JobSift: ${result.score}% match — ${result.text || ''}`
-      : 'JobSift: Complete your profile to score this job';
+      ? `Rolevance: ${result.score}% match — ${result.text || ''}`
+      : 'Rolevance: Complete your profile to score this job';
 
     banner.className = `js-detail-banner js-detail-banner--${label}`;
     banner.setAttribute('aria-label', ariaLabel);
@@ -312,13 +306,10 @@
         <div class="js-db-left">
           <div class="js-db-brand">
             <svg viewBox="0 0 16 18" fill="none" width="11" height="13" aria-hidden="true">
-              <rect x="1" y="2" width="14" height="2" rx="1" fill="rgba(17,30,92,0.7)"/>
-              <rect x="2" y="6" width="12" height="2" rx="1" fill="rgba(17,30,92,0.45)"/>
-              <rect x="3" y="10" width="10" height="2" rx="1" fill="rgba(17,30,92,0.2)"/>
-              <circle cx="8" cy="15.2" r="2" fill="#3b82f6"/>
-              <circle cx="8" cy="15.2" r=".85" fill="white"/>
+              <circle cx="8" cy="9" r="6" fill="none" stroke="#059669" stroke-width="1.3"/>
+              <circle cx="9.5" cy="7.5" r="2.2" fill="#059669"/>
             </svg>
-            <span class="js-db-brand-name">JobSift</span>
+            <span class="js-db-brand-name">Rolevance</span>
           </div>
           <div class="js-db-score-wrap">
             <span class="js-db-dot js-db-dot--${label}"></span>
@@ -423,8 +414,8 @@
     const hasScore  = result.score !== null && result.score !== undefined;
     const scoreText = hasScore ? `${result.score}%` : '—';
     const ariaText  = hasScore
-      ? `JobSift: ${result.score}% match — ${result.text || ''}`
-      : `JobSift: ${result.text || 'Set up your profile to score jobs'}`;
+      ? `Rolevance: ${result.score}% match — ${result.text || ''}`
+      : `Rolevance: ${result.text || 'Set up your profile to score jobs'}`;
 
     const badge = document.createElement('span');
     badge.className = `js-badge js-badge--${safeLabel} js-badge--indeed-float`;
@@ -482,19 +473,16 @@
     brand.innerHTML = `
       <div style="
         width:24px;height:24px;border-radius:6px;
-        background:linear-gradient(135deg,#111e5c,#0a1438);
+        background:linear-gradient(135deg,#163526,#1F4A35);
         display:flex;align-items:center;justify-content:center;flex-shrink:0;
-        box-shadow:0 1px 4px rgba(10,20,56,0.3);
+        box-shadow:0 1px 4px rgba(5,50,20,0.3);
       ">
         <svg viewBox="0 0 16 18" fill="none" width="11" height="13">
-          <rect x="1" y="2" width="14" height="2" rx="1" fill="rgba(255,255,255,0.92)"/>
-          <rect x="2" y="6" width="12" height="2" rx="1" fill="rgba(255,255,255,0.55)"/>
-          <rect x="3" y="10" width="10" height="2" rx="1" fill="rgba(255,255,255,0.22)"/>
-          <circle cx="8" cy="15.2" r="2" fill="#3b82f6"/>
-          <circle cx="8" cy="15.2" r=".85" fill="white"/>
+          <circle cx="8" cy="9" r="6" fill="none" stroke="#6EE7B7" stroke-width="1.3"/>
+          <circle cx="9.5" cy="7.5" r="2.2" fill="#059669"/>
         </svg>
       </div>
-      <span>JobSift</span>`;
+      <span>Rolevance</span>`;
 
     const divider = document.createElement('div');
     divider.className = 'js-fb-divider';
@@ -592,13 +580,10 @@
         <div class="js-db-left">
           <div class="js-db-brand">
             <svg viewBox="0 0 16 18" fill="none" width="11" height="13" aria-hidden="true">
-              <rect x="1" y="2" width="14" height="2" rx="1" fill="rgba(17,30,92,0.7)"/>
-              <rect x="2" y="6" width="12" height="2" rx="1" fill="rgba(17,30,92,0.45)"/>
-              <rect x="3" y="10" width="10" height="2" rx="1" fill="rgba(17,30,92,0.2)"/>
-              <circle cx="8" cy="15.2" r="2" fill="#3b82f6"/>
-              <circle cx="8" cy="15.2" r=".85" fill="white"/>
+              <circle cx="8" cy="9" r="6" fill="none" stroke="#059669" stroke-width="1.3"/>
+              <circle cx="9.5" cy="7.5" r="2.2" fill="#059669"/>
             </svg>
-            <span class="js-db-brand-name">JobSift</span>
+            <span class="js-db-brand-name">Rolevance</span>
           </div>
           <span class="js-db-dot js-db-dot--loading"></span>
           <span class="js-db-loading-text">Scoring this job…</span>
@@ -622,7 +607,7 @@
     banner.id = 'js-indeed-detail-banner';
     banner.className = 'js-detail-banner js-detail-banner--loading js-detail-banner--indeed';
     banner.setAttribute('role', 'status');
-    banner.setAttribute('aria-label', 'JobSift: scoring this job…');
+    banner.setAttribute('aria-label', 'Rolevance: scoring this job…');
     banner.innerHTML = _buildBannerLoadingHTML();
 
     header.parentElement.insertBefore(banner, header);
@@ -640,7 +625,7 @@
 
     banner.className = `js-detail-banner js-detail-banner--${label} js-detail-banner--indeed`;
     banner.setAttribute('aria-label',
-      hasScore ? `JobSift: ${result.score}% match — ${result.text || ''}` : 'JobSift: Complete your profile to score this job'
+      hasScore ? `Rolevance: ${result.score}% match — ${result.text || ''}` : 'Rolevance: Complete your profile to score this job'
     );
 
     banner.innerHTML = `
@@ -648,13 +633,10 @@
         <div class="js-db-left">
           <div class="js-db-brand">
             <svg viewBox="0 0 16 18" fill="none" width="11" height="13" aria-hidden="true">
-              <rect x="1" y="2" width="14" height="2" rx="1" fill="rgba(17,30,92,0.7)"/>
-              <rect x="2" y="6" width="12" height="2" rx="1" fill="rgba(17,30,92,0.45)"/>
-              <rect x="3" y="10" width="10" height="2" rx="1" fill="rgba(17,30,92,0.2)"/>
-              <circle cx="8" cy="15.2" r="2" fill="#3b82f6"/>
-              <circle cx="8" cy="15.2" r=".85" fill="white"/>
+              <circle cx="8" cy="9" r="6" fill="none" stroke="#059669" stroke-width="1.3"/>
+              <circle cx="9.5" cy="7.5" r="2.2" fill="#059669"/>
             </svg>
-            <span class="js-db-brand-name">JobSift</span>
+            <span class="js-db-brand-name">Rolevance</span>
           </div>
           <div class="js-db-score-wrap">
             <span class="js-db-dot js-db-dot--${label}"></span>

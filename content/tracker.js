@@ -1,4 +1,4 @@
-// JobSift Tracker v1.0.0
+// Rolevance Tracker v5.0
 // Manages the job application pipeline stored in chrome.storage.local.
 // Runs as a content script on LinkedIn and Indeed — exports window.jsTracker
 // for use by panel.js and injector.js in the same page context.

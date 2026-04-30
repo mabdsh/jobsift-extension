@@ -1,4 +1,4 @@
-// JobSift Content v2.5.0
+// Rolevance Content v5.0
 // v2.5.0: Indeed support — badges on search cards, banner on right pane + /viewjob.
 // v2.4.0: LinkedIn job detail page support — auto-scores /jobs/view/ URLs.
 // v2.3.0: fix SPA navigation — badges now appear when clicking Jobs tab.
@@ -598,7 +598,7 @@
         }
         if (unscored.length > 0) scheduleBatch();
       } catch (err) {
-        console.warn('[JobSift] Continuous scanner error:', err);
+        console.warn('[Rolevance] Continuous scanner error:', err);
       }
     }, 2000);
   }
@@ -634,7 +634,7 @@
     stopContinuousScanning();
     disconnectIndeedRightPaneObserver();
 
-    // Remove all injected JobSift elements on both platforms
+    // Remove all injected Rolevance elements on both platforms
     document.querySelectorAll(
       '.js-badge, .js-panel, #js-filter-bar, #js-indeed-filter-bar'
     ).forEach(el => el.remove());
@@ -772,7 +772,7 @@
     try {
       _prefs = await loadPreferences();
     } catch (err) {
-      console.warn('[JobSift] Failed to load preferences:', err);
+      console.warn('[Rolevance] Failed to load preferences:', err);
       _prefs = null;
     }
 
@@ -794,7 +794,7 @@
         }
       }
     } catch (err) {
-      console.warn('[JobSift] Init error:', err);
+      console.warn('[Rolevance] Init error:', err);
     }
   }
 

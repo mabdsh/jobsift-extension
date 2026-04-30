@@ -1,4 +1,4 @@
-// JobSift AI Analyzer v3.1.0
+// Rolevance AI Analyzer v5.0
 // v3.1.0: getFullDescription() updated to use data-testid="expandable-text-box" —
 //         the previous class-based selectors are dead on LinkedIn's new obfuscated DOM.
 //         Renders deep analysis inside the panel: decision → summary →

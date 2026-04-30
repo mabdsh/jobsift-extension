@@ -1,4 +1,4 @@
-// JobSift Observer v2.1.0
+// Rolevance Observer v5.0
 // v2.1.0: Indeed card detection — cardOutline + data-jk in fallback and card-done check
 
 (function () {
@@ -32,7 +32,7 @@
           try {
             onNewCard(card);
           } catch (err) {
-            console.warn('[JobSift] Observer card processing error:', err);
+            console.warn('[Rolevance] Observer card processing error:', err);
           }
         }), 180);
       }

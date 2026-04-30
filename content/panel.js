@@ -1,4 +1,4 @@
-// JobSift Panel v3.2.0
+// Rolevance Panel v5.0
 // v3.2.0: anchor parameter replaces li — panel now works on any container element,
 //         enabling detail page support where the anchor is a dedicated panel-root div.
 // Layout: SVG arc ring → verdict → decision block → quick-facts →
@@ -253,15 +253,15 @@
 
   // ── Footer text ────────────────────────────────────────────────────────────
   function _buildFooterHTML(pcr) {
-    if (!pcr) return '<strong>JobSift</strong> · AI analysis loads when you open the full job';
+    if (!pcr) return '<strong>Rolevance</strong> · AI analysis loads when you open the full job';
     if (pcr.trial && pcr.trialDaysLeft !== null) {
-      return `<strong>JobSift</strong> · Trial · ${pcr.trialDaysLeft} day${pcr.trialDaysLeft !== 1 ? 's' : ''} remaining`;
+      return `<strong>Rolevance</strong> · Trial · ${pcr.trialDaysLeft} day${pcr.trialDaysLeft !== 1 ? 's' : ''} remaining`;
     }
     if (!pcr.trial && pcr.limit !== null) {
       const remaining = pcr.limit - (pcr.usedToday || 0);
-      return `<strong>JobSift</strong> · ${pcr.usedToday || 0} of ${pcr.limit} panels used today · ${remaining} remaining`;
+      return `<strong>Rolevance</strong> · ${pcr.usedToday || 0} of ${pcr.limit} panels used today · ${remaining} remaining`;
     }
-    return '<strong>JobSift</strong> · AI analysis loads when you open the full job';
+    return '<strong>Rolevance</strong> · AI analysis loads when you open the full job';
   }
 
   // ── Limit panel ────────────────────────────────────────────────────────────
@@ -314,8 +314,8 @@
           <span class="js-lp-limit-name">profile parses / day</span>
         </div>
         <div class="js-lp-limit-item">
-          <span class="js-lp-limit-num">∞</span>
-          <span class="js-lp-limit-name">job scoring</span>
+          <span class="js-lp-limit-num">7</span>
+          <span class="js-lp-limit-name">day free trial</span>
         </div>
       </div>`;
     panel.appendChild(plan);
@@ -328,7 +328,7 @@
     upgrade.className = 'js-lp-upgrade';
     upgrade.innerHTML = `
       <div class="js-lp-upgrade-hdr">
-        <div class="js-lp-upgrade-title">JobSift Pro</div>
+        <div class="js-lp-upgrade-title">Rolevance Pro</div>
         <div class="js-lp-upgrade-price">$7<span>/month</span></div>
       </div>
       <div class="js-lp-features">
@@ -367,7 +367,7 @@
 
     const footer = document.createElement('div');
     footer.className = 'js-panel-footer js-lp-footer';
-    footer.textContent = 'JobSift · Free plan · Panels reset at midnight UTC';
+    footer.textContent = 'Rolevance · Free plan · Panels reset at midnight UTC';
     panel.appendChild(footer);
 
     return panel;

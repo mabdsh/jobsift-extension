@@ -1,4 +1,4 @@
-// JobSift Popup v2.6.0
+// Rolevance Popup v5.0
 // v2.6.0: manage billing section for Pro users
 // v2.5.0: first-run onboarding screen for new users
 // v2.4.0: email collection · deviceId storage bug fix · trial tier awareness

@@ -1,4 +1,4 @@
-// JobSift Scraper v2.1.0
+// Rolevance Scraper v5.0
 // Extracts job data from LinkedIn job cards — /jobs/search/ only.
 // v2.1.0: added isDetailPage() + extractDetailPageData() for /jobs/view/ support.
 

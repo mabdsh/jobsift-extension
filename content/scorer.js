@@ -1,4 +1,8 @@
-// JobSift Scorer v2.1.0
+// Rolevance Scorer v5.1
+// v5.1: Label thresholds now score-only (green≥70, amber 50-69, red<50),
+//       consistent with AI backend. The missingCritical label override was
+//       double-penalising the same gap already covered by the -18pt score deduction.
+//       Only kept: 2+ missing critical skills → always red.
 // Three-tier skill system · weighted criteria · unified 0-100 score
 // v2.1.0: O(1) alias lookup via pre-built reverse map (was O(n) per keyword)
 
@@ -420,9 +424,18 @@
     const confidence = maxW > 0 ? totalW / maxW : 0;
 
     let label;
-    if (missingCritical.length >= 2)       label = 'red';
-    else if (missingCritical.length === 1) label = score >= 75 ? 'amber' : 'red';
-    else label = score >= 75 ? 'green' : score >= 50 ? 'amber' : 'red';
+    if (missingCritical.length >= 2) {
+      // Two or more non-negotiable skills absent — always red regardless of score.
+      // The 18pt-per-skill deduction already affects the number; this override
+      // exists because a job missing 2+ critical requirements is a genuine skip
+      // even if everything else scores well.
+      label = 'red';
+    } else {
+      // Score-only thresholds — consistent with the AI backend in groqClient.ts.
+      // The single missing-critical penalty is already baked into the score
+      // (-18pts) so no separate label override is needed here.
+      label = score >= 70 ? 'green' : score >= 50 ? 'amber' : 'red';
+    }
 
     const textMap = [
       [85,'Exceptional fit'],[75,'Strong match'],[65,'Good match'],
