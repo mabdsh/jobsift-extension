@@ -111,6 +111,12 @@
 
     old.replaceWith(badge);
 
+    // Spring-scale entrance on first green result — signals "good news"
+    if (safeLabel === 'green') {
+      badge.classList.add('js-badge--pop');
+      badge.addEventListener('animationend', () => badge.classList.remove('js-badge--pop'), { once: true });
+    }
+
     const key = _jobKey(jobData, li);
     if (key) _jobResults.set(key, safeLabel);
 
@@ -441,6 +447,12 @@
     });
 
     old.replaceWith(badge);
+
+    // Spring-scale entrance on first green result
+    if (safeLabel === 'green') {
+      badge.classList.add('js-badge--pop');
+      badge.addEventListener('animationend', () => badge.classList.remove('js-badge--pop'), { once: true });
+    }
 
     const key = jobData?.jobId || (jobData?.title ? `${jobData.title}|${jobData.company || ''}` : null);
     if (key) _jobResults.set(key, safeLabel);

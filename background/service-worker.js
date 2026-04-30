@@ -140,6 +140,45 @@ async function fetchAndCacheSubStatus() {
   } catch (_) {}
 }
 
+// ── Post-upgrade polling ──────────────────────────────────────────────────────
+// After the checkout tab opens, poll every 8 seconds for up to 3 minutes.
+// When the cached tier flips to 'pro', notify all extension pages and stop.
+// This gives the user immediate feedback in the popup without waiting for the
+// hourly alarm to refresh subscription status.
+
+let _upgradePollingTimer = null;
+
+function startUpgradePolling() {
+  if (_upgradePollingTimer) return; // already running
+
+  let attempts = 0;
+  const MAX_ATTEMPTS = 22; // 8s × 22 ≈ 3 minutes
+
+  _upgradePollingTimer = setInterval(async () => {
+    attempts++;
+
+    if (attempts > MAX_ATTEMPTS) {
+      clearInterval(_upgradePollingTimer);
+      _upgradePollingTimer = null;
+      return;
+    }
+
+    await fetchAndCacheSubStatus();
+
+    const cached = await new Promise(r =>
+      chrome.storage.local.get('jobsift_sub', d => r(d.jobsift_sub || null))
+    );
+
+    if (cached?.tier === 'pro') {
+      clearInterval(_upgradePollingTimer);
+      _upgradePollingTimer = null;
+      // Notify the popup (and any open extension pages) about the upgrade
+      chrome.runtime.sendMessage({ type: 'JS_UPGRADE_COMPLETE' }).catch(() => {});
+      console.log('[Rolevance] Upgrade detected — notified popup');
+    }
+  }, 8000);
+}
+
 // ── Message routing ────────────────────────────────────────────────────────────
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
@@ -255,6 +294,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
       chrome.tabs.create({ url: checkoutUrl });
       sendResponse({ ok: true });
+      // Begin polling for upgrade completion (max 3 minutes, 8s interval)
+      startUpgradePolling();
     });
     return true;
   }

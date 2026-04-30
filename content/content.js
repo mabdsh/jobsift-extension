@@ -60,6 +60,30 @@
            p.startsWith('/search/results/jobs');
   }
 
+  // ── Daily stats ───────────────────────────────────────────────────────────
+  // Lightweight counter written to chrome.storage.local after each new score.
+  // Resets automatically each day. Read by the popup dashboard.
+  const DAILY_STATS_KEY = 'rolevance_daily';
+
+  function _getTodayDate() {
+    return new Date().toISOString().split('T')[0]; // YYYY-MM-DD UTC
+  }
+
+  function _incrementDailyStats(label) {
+    const today = _getTodayDate();
+    chrome.storage.local.get(DAILY_STATS_KEY, d => {
+      const prev  = d[DAILY_STATS_KEY] || {};
+      const stats = (prev.date === today)
+        ? { date: today, jobsScored: prev.jobsScored || 0, strongMatches: prev.strongMatches || 0 }
+        : { date: today, jobsScored: 0, strongMatches: 0 };
+
+      stats.jobsScored++;
+      if (label === 'green') stats.strongMatches++;
+
+      chrome.storage.local.set({ [DAILY_STATS_KEY]: stats });
+    });
+  }
+
   // ── Score cache ────────────────────────────────────────────────────────────
   // Shared between search-page batch scoring and detail-page scoring.
   // Key: jobId. Invalidated by profile change or age > 24 hours. Max 500 entries.
@@ -235,6 +259,7 @@
         if (jobData.jobId) _store.set(jobData.jobId, { jobData, result });
         if (onIndeed) window.updateIndeedBadgeWithResult?.(anchor, result, jobData);
         else          window.updateBadgeWithResult(anchor, result, jobData);
+        if (result.score !== null) _incrementDailyStats(result.label);
         return;
       }
 
@@ -273,6 +298,7 @@
 
       if (onIndeed) window.updateIndeedBadgeWithResult?.(anchor, result, jobData);
       else          window.updateBadgeWithResult(anchor, result, jobData);
+      if (result.score !== null) _incrementDailyStats(result.label);
     });
 
     if (Object.keys(newCacheEntries).length) {

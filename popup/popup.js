@@ -8,6 +8,12 @@
 const MAX_CRITICAL = 4;
 const tags = { roles:[], critical:[], primary:[], secondary:[], deal:[], avoid:[] };
 
+// ── Dashboard state ────────────────────────────────────────────────────────────
+let _subStatus    = null;  // cached subscription status, set by updateSubscriptionUI
+let _dashboardMode = false; // true = show dashboard, false = show accordion form
+let _dailyStats   = null;  // cached today's scoring activity
+let _saveTimer    = null;  // debounce handle for auto-save
+
 const COMPLETENESS_FIELDS = [
   { key:'critical',  label:'Critical skills', pct:35, check:()=>tags.critical.length>0||tags.primary.length>0 },
   { key:'roles',     label:'Target roles',    pct:20, check:()=>tags.roles.length>0 },
@@ -32,9 +38,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   updateStatus();
   updateFooter();
 
-  document.getElementById('saveBtn').addEventListener('click', save);
+  // ── Auto-save ───────────────────────────────────────────────────────────────
+  // No save button — changes are committed 800ms after the last edit.
+  // Text inputs and selects use a debounced timer; tag changes save immediately
+  // via scheduleSave() called directly in renderTags and setupTagInputs.
   document.querySelectorAll('input, select, textarea').forEach(el =>
-    el.addEventListener('input', updateFooter)
+    el.addEventListener('input', () => { updateFooter(); scheduleSave(); })
+  );
+  document.querySelectorAll('input[type="checkbox"]').forEach(el =>
+    el.addEventListener('change', () => { updateFooter(); scheduleSave(); })
   );
 
   setupUpgradeUI();
@@ -54,7 +66,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     && !data?.profile?.targetRoles?.length
     && !data?.profile?.experienceYears;
 
-  if (isNewUser) showOnboarding();
+  if (isNewUser) {
+    showOnboarding();
+  } else {
+    showDashboard();
+    document.getElementById('dashEditBtn')?.addEventListener('click', hideDashboard);
+  }
 });
 
 // ── Onboarding ─────────────────────────────────────────────────────────────────
@@ -85,6 +102,137 @@ function dismissOnboarding() {
   // can start immediately — pasting their CV / LinkedIn bio is step 1.
   document.getElementById('acc-profile')?.classList.add('open');
   setTimeout(() => document.getElementById('desc')?.focus(), 100);
+}
+
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+// Shown to returning users on popup open.
+// showDashboard() hides the accordion and shows the value-first view.
+// hideDashboard() restores the accordion when user clicks "Configure profile".
+
+async function showDashboard() {
+  _dashboardMode = true;
+  const db = document.getElementById('dashboard');
+  const sa = document.getElementById('scrollArea');
+  if (db) db.style.display = 'flex';
+  if (sa) sa.style.display = 'none';
+
+  // Load today's stats before rendering so the ring and stats show together
+  _dailyStats = await _loadDailyStats();
+  renderDashboard(_subStatus);
+}
+
+function hideDashboard() {
+  _dashboardMode = false;
+  const db = document.getElementById('dashboard');
+  const sa = document.getElementById('scrollArea');
+  if (db) db.style.display = 'none';
+  if (sa) sa.style.display = '';
+  document.getElementById('acc-profile')?.classList.add('open');
+}
+
+// Reads today's scoring activity from chrome.storage.local.
+// Returns { date, jobsScored, strongMatches } or null if no activity today.
+function _loadDailyStats() {
+  const today = new Date().toISOString().split('T')[0];
+  return new Promise(resolve => {
+    chrome.storage.local.get('rolevance_daily', d => {
+      const s = d.rolevance_daily;
+      resolve((s?.date === today) ? s : null);
+    });
+  });
+}
+
+function renderDashboard(status) {
+  const CIRC = 263.9;
+
+  // ── Completeness ring ──────────────────────────────────────────────────────
+  const done = COMPLETENESS_FIELDS.filter(f => f.check()).length;
+  const pct  = Math.round(done / COMPLETENESS_FIELDS.length * 100);
+
+  const arc   = document.getElementById('dashRingArc');
+  const pctEl = document.getElementById('dashPct');
+  const lblEl = document.getElementById('dashRingLbl');
+
+  if (arc) {
+    arc.style.transition       = 'stroke-dashoffset 0.55s cubic-bezier(.4,0,.2,1)';
+    arc.style.strokeDashoffset = String(CIRC * (1 - pct / 100));
+    arc.style.stroke           = pct >= 60 ? '#059669' : '#D97706';
+  }
+  if (pctEl) pctEl.textContent = pct + '%';
+  if (lblEl) {
+    lblEl.textContent = pct === 100 ? 'Profile complete ✓' : 'Profile completeness';
+    lblEl.style.color = pct === 100 ? 'var(--accent)' : '';
+  }
+
+  // ── Today's activity stats ─────────────────────────────────────────────────
+  const statsEl = document.getElementById('dashStats');
+  if (statsEl) {
+    const s = _dailyStats;
+    if (s && s.jobsScored > 0) {
+      statsEl.innerHTML =
+        `Scored <strong>${s.jobsScored}</strong> job${s.jobsScored !== 1 ? 's' : ''} · ` +
+        `<strong>${s.strongMatches}</strong> strong match${s.strongMatches !== 1 ? 'es' : ''} today`;
+      statsEl.className = 'dash-stats dash-stats--active';
+    } else {
+      statsEl.textContent = 'Browse LinkedIn or Indeed to start scoring';
+      statsEl.className   = 'dash-stats';
+    }
+  }
+
+  // ── Subscription status ────────────────────────────────────────────────────
+  const statusEl = document.getElementById('dashStatus');
+  if (statusEl) {
+    if (!status || !status.subscriptions_enabled) {
+      statusEl.innerHTML =
+        '<span class="dash-badge dash-badge--pro">Pro</span> Full access · all features active';
+    } else if (status.tier === 'pro') {
+      statusEl.innerHTML =
+        '<span class="dash-badge dash-badge--pro">Pro</span> Full access · all features active';
+    } else if (status.tier === 'trial') {
+      const days    = status.trial_days_left ?? 5;
+      const warn    = days <= 2 ? ' dash-badge--warn' : '';
+      const dayText = days <= 1 ? 'Last day' : `${days}d remaining`;
+      statusEl.innerHTML =
+        `<span class="dash-badge dash-badge--trial${warn}">Trial</span> ${dayText} · all features active`;
+    } else {
+      statusEl.innerHTML =
+        '<span class="dash-badge dash-badge--free">Free</span> 5 panels/day · unlimited scoring';
+    }
+  }
+
+  // ── Missing fields ─────────────────────────────────────────────────────────
+  const missingEl = document.getElementById('dashMissing');
+  if (missingEl) {
+    const missing = COMPLETENESS_FIELDS.filter(f => !f.check());
+    if (!missing.length) {
+      missingEl.innerHTML = '';
+    } else {
+      const chips = missing.slice(0, 3)
+        .map(f => `<span class="dash-missing-chip">${f.label}</span>`)
+        .join('');
+      missingEl.innerHTML = `<span class="dash-missing-lbl">Missing:</span>${chips}`;
+    }
+  }
+}
+
+// ── Upgrade complete listener ──────────────────────────────────────────────────
+// The service worker polls after checkout opens and sends this message when
+// the tier flips to 'pro'. Auto-refreshes the popup UI without user action.
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg.type !== 'JS_UPGRADE_COMPLETE') return;
+  showProToast();
+  loadSubscriptionStatus().then(status => {
+    updateSubscriptionUI(status);
+    if (_dashboardMode) renderDashboard(status);
+  });
+});
+
+function showProToast() {
+  const toast = document.getElementById('saveToast');
+  if (!toast) return;
+  toast.textContent = '🎉 You\'re now Pro — enjoy unlimited panels';
+  toast.classList.remove('save-toast--hidden');
+  setTimeout(() => toast.classList.add('save-toast--hidden'), 5000);
 }
 
 // ── Accordion ─────────────────────────────────────────────────────────────────
@@ -122,6 +270,7 @@ function setupTagInputs() {
           tags[key].push(val);
           renderTags(list, key, danger);
           updateFooter();
+          scheduleSave();
         }
         inpEl.value = '';
       }
@@ -129,6 +278,7 @@ function setupTagInputs() {
         tags[key].pop();
         renderTags(list, key, danger);
         updateFooter();
+        scheduleSave();
       }
     });
   });
@@ -149,7 +299,7 @@ function renderTags(listId, key, danger) {
     rm.className = 'tag-rm';
     rm.innerHTML = '×';
     rm.setAttribute('aria-label', `Remove ${t}`);
-    rm.addEventListener('click', () => { tags[key].splice(i,1); renderTags(listId,key,danger); updateFooter(); });
+    rm.addEventListener('click', () => { tags[key].splice(i,1); renderTags(listId,key,danger); updateFooter(); scheduleSave(); });
 
     tag.append(txt, rm);
     list.appendChild(tag);
@@ -200,11 +350,39 @@ function applyProfile(p) {
   if (af) af.disabled = get('desc').length < 20;
 }
 
+// ── Auto-save helpers ────────────────────────────────────────────────────────
+
+function scheduleSave() {
+  setAutoSaveStatus('pending');
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(() => save(true), 800);
+}
+
+function setAutoSaveStatus(state) {
+  const el = document.getElementById('autoSaveStatus');
+  if (!el) return;
+  if (state === 'pending') {
+    el.textContent = 'Saving…';
+    el.className   = 'autosave-status autosave-status--pending';
+  } else if (state === 'saved') {
+    el.textContent = 'Saved ✓';
+    el.className   = 'autosave-status autosave-status--saved';
+    clearTimeout(el._fadeTimer);
+    el._fadeTimer = setTimeout(() => {
+      el.textContent = '';
+      el.className   = 'autosave-status';
+    }, 2200);
+  } else {
+    el.textContent = '';
+    el.className   = 'autosave-status';
+  }
+}
+
 // ── Save ──────────────────────────────────────────────────────────────────────
 // CRITICAL FIX: reads existing storage first and spreads it before saving.
 // The previous version did `chrome.storage.local.set({ jobsift: { profile } })`
 // which silently dropped deviceId on every save, breaking AI scoring.
-async function save() {
+async function save(silent = false) {
   const profile = {
     description:      get('desc'),
     currentTitle:     get('currentTitle'),
@@ -234,10 +412,16 @@ async function save() {
 
     await chrome.storage.local.set({ jobsift: { ...existing, profile } });
 
-    const toast = document.getElementById('saveToast');
-    if (toast) {
-      toast.classList.remove('save-toast--hidden');
-      setTimeout(() => toast.classList.add('save-toast--hidden'), 3000);
+    if (silent) {
+      // Auto-save: show subtle inline status, no toast
+      setAutoSaveStatus('saved');
+    } else {
+      // Explicit save (e.g. autofill completion): show the full toast
+      const toast = document.getElementById('saveToast');
+      if (toast) {
+        toast.classList.remove('save-toast--hidden');
+        setTimeout(() => toast.classList.add('save-toast--hidden'), 3000);
+      }
     }
   } catch (e) {
     showMsg('afMsg', '⚠ Save failed', 'error');
@@ -288,7 +472,7 @@ async function runAutofill() {
     const res = await chrome.runtime.sendMessage({ type:'JS_PARSE_PROFILE', text });
     if (!res?.ok) throw new Error(res?.error || 'failed');
     applyParsed(res.result);
-    label.textContent = '✓ Fields updated — review and save';
+    label.textContent = '✓ Profile updated — changes saved automatically';
     showMsg('afMsg', '✓ Profile extracted from your description', 'success');
     setTimeout(() => { label.textContent = 'Auto-fill from description'; btn.disabled = false; }, 3500);
   } catch (err) {
@@ -367,15 +551,7 @@ function updateFooter() {
     }
   }
 
-  const guide = document.getElementById('completenessGuide');
-  if (guide) {
-    const missing = COMPLETENESS_FIELDS.filter(f => !f.check()).slice(0,3);
-    if (missing.length === 0) { guide.innerHTML = ''; return; }
-    const items = missing.map(f =>
-      `<span class="guide-item"><span class="guide-field">${f.label}</span><span class="guide-pct">${f.pct}%</span></span>`
-    ).join('');
-    guide.innerHTML = `<span class="guide-prefix">Missing:</span>${items}`;
-  }
+
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -409,6 +585,11 @@ async function loadSubscriptionStatus() {
 // When subscriptions are disabled globally (soft launch mode), none of these
 // sections are shown — everyone has Pro access silently.
 function updateSubscriptionUI(status) {
+  // Cache for dashboard — must be first so renderDashboard always has fresh data
+  _subStatus = status;
+  const db = document.getElementById('dashboard');
+  if (db && db.style.display !== 'none') renderDashboard(status);
+
   const upgradeSection       = document.getElementById('upgradeSection');
   const manageBillingSection = document.getElementById('manageBillingSection');
   const proBadge             = document.getElementById('proBadge');
@@ -741,7 +922,9 @@ function buildTrackerCard(entry) {
 
   card.innerHTML = `
     <div class="tk-card-top">
-      <span class="tk-score-dot tk-score-dot--${entry.label}">${scoreText}</span>
+      <div class="tk-score-tile tk-score-tile--${entry.label}">
+        <span class="tk-score-num">${scoreText}</span>
+      </div>
       <div class="tk-card-info">
         <div class="tk-card-title">${_esc(entry.title)}</div>
         <div class="tk-card-meta">

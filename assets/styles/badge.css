@@ -64,6 +64,21 @@
   40%         { opacity:1;  transform:scale(1.1); }
 }
 
+
+/* ── Green badge entrance animation ─────────────────────────────────────────
+   Applied once when a green badge is first injected. Communicates "good news"
+   with a subtle spring-scale pulse. Removed via animationend in injector.js.
+─────────────────────────────────────────────────────────────────────────── */
+@keyframes jsGreenPop {
+  0%   { transform: scale(1);    }
+  45%  { transform: scale(1.09); }
+  100% { transform: scale(1);    }
+}
+
+.js-badge--pop {
+  animation: jsGreenPop 0.22s cubic-bezier(.34,1.56,.64,1) forwards !important;
+}
+
 /* ════════════════════════════════════════════════════════════════════════════
    FILTER BAR — premium pill design
    
@@ -85,7 +100,7 @@
   border-radius:12px!important;
   box-shadow:0 1px 6px rgba(0,0,0,0.06)!important;
   border-bottom:2px solid rgba(5,150,105,0.18)!important;
-  font-family:var(--js-font)!important; flex-wrap:wrap!important; z-index:5!important;
+  font-family:var(--js-font)!important; flex-wrap:nowrap!important; z-index:5!important;
 }
 
 /* Brand: icon mark + "JobSift" name */
@@ -110,7 +125,7 @@
 }
 
 /* Button group */
-.js-fb-btns { display:flex!important; gap:5px!important; flex:1!important; }
+.js-fb-btns { display:flex!important; gap:4px!important; flex:1!important; }
 
 /* ── Filter pill buttons ───────────────────────────────────────────────────
    Inactive: white background, soft border, muted text.
@@ -119,8 +134,8 @@
 ─────────────────────────────────────────────────────────────────────────── */
 .js-fb-btn {
   display:inline-flex!important; align-items:center!important; gap:5px!important;
-  padding:4px 12px!important; border-radius:99px!important;
-  font-size:11.5px!important; font-weight:600!important;
+  padding:4px 9px!important; border-radius:99px!important;
+  font-size:11px!important; font-weight:600!important;
   border:1.5px solid #e2e6ef!important;
   background:#fff!important; color:#64748b!important;
   cursor:pointer!important; transition:all .13s!important;
@@ -581,15 +596,15 @@
 #js-indeed-filter-bar {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
+  gap: 8px;
+  padding: 8px 12px;
   background: #fff;
   border: 1px solid #e5e7eb;
   border-radius: 10px;
   margin-bottom: 12px;
   box-shadow: 0 1px 4px rgba(0,0,0,0.06);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 /* Reuse all .js-fb-* rules — they're already in badge.css and apply here    */
