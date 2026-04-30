@@ -1,10 +1,7 @@
-// Rolevance Scorer v5.1
-// v5.1: Label thresholds now score-only (green≥70, amber 50-69, red<50),
-//       consistent with AI backend. The missingCritical label override was
-//       double-penalising the same gap already covered by the -18pt score deduction.
-//       Only kept: 2+ missing critical skills → always red.
-// Three-tier skill system · weighted criteria · unified 0-100 score
-// v2.1.0: O(1) alias lookup via pre-built reverse map (was O(n) per keyword)
+// Rolevance Scorer v5.2
+// v5.2: Fixed denominator bug in scoreSkills — primary skills no longer penalise
+//       score when unmatched. Role category matching added. missingCritical
+//       penalty reduced -18→-8. Label thresholds aligned: green≥70.
 
 (function () {
   'use strict';
@@ -145,48 +142,81 @@
   // ══════════════════════════════════════════════════════════════════════════
 
   // 1. Technical skills — 35%
+  //
+  // Key design principles:
+  //   Critical skills: scored independently as a proportion (critMatched / critical.length)
+  //   Primary skills:  positive matches only — missing ones do NOT penalise.
+  //                    Benchmark = min(4, primary.length) so having 10 skills
+  //                    doesn't make you score worse than having 4.
+  //   Secondary:       small bonus only, never negative
+  //   Title hits:      bonus for skills appearing in the job title itself
+  //
+  //   Old bug: (critMatched*1.4 + primMatched) / (critical.length + primary.length)
+  //   A dev with 2 critical (both match) + 7 primary (0 match in card snippet)
+  //   scored 2.8/9 = 0.31 (PARTIAL) — completely wrong for a perfect critical match.
   function scoreSkills(jobTitle, jobRaw, critical, primary, secondary) {
     const hasAny = critical.length || primary.length || secondary.length;
     if (!hasAny) return _unknown('Technical skills', 35, 'Add skills to your profile — this drives 35% of every score');
 
-    const allPrimary = [...critical, ...primary];
-    if (!allPrimary.length) {
-      const bonusHits = secondary.filter(kw => matchKeyword(kw, jobTitle, jobRaw).matched);
-      const value = bonusHits.length ? Math.min(0.5, bonusHits.length / secondary.length) : 0;
-      return { name:'Technical skills', status: value > 0 ? 'partial' : 'unknown',
+    // Secondary-only profile: low confidence but still useful
+    if (!critical.length && !primary.length) {
+      const secHits = secondary.filter(kw => matchKeyword(kw, jobTitle, jobRaw).matched);
+      const value   = secHits.length ? Math.min(0.45, secHits.length / secondary.length) : 0;
+      return { name:'Technical skills', status: value >= 0.2 ? 'partial' : 'unknown',
         value, weight:35, note:'Only secondary skills set — add primary skills for accurate scoring',
         verdict:null, matched:[], missing:[], missingCritical:[] };
     }
 
-    const critResults     = critical.map(kw => ({ kw, ...matchKeyword(kw, jobTitle, jobRaw) }));
+    // ── Critical skills — each missing one is a meaningful signal ──────────
+    const critResults    = critical.map(kw => ({ kw, ...matchKeyword(kw, jobTitle, jobRaw) }));
+    const critMatchedN   = critResults.filter(r => r.matched).length;
     const missingCritical = critResults.filter(r => !r.matched).map(r => r.kw);
+    // Proportion of critical skills found — 0 to 1
+    const critScore      = critical.length > 0 ? critMatchedN / critical.length : 1.0;
 
-    const primResults = primary.map(kw => ({ kw, ...matchKeyword(kw, jobTitle, jobRaw) }));
-    const primMatched = primResults.filter(r => r.matched);
-    const primMissing = primResults.filter(r => !r.matched);
+    // ── Primary skills — reward matches, don't punish for large skill sets ──
+    // A candidate with 10 listed skills shouldn't be penalised because this one
+    // job only mentions 3 of them. Use a benchmark of min(4, primary.length)
+    // so matching 3-4 primary skills = full primary score.
+    const primResults  = primary.map(kw => ({ kw, ...matchKeyword(kw, jobTitle, jobRaw) }));
+    const primMatched  = primResults.filter(r => r.matched);
+    const primMissing  = primResults.filter(r => !r.matched);
+    const primBenchmark = Math.min(4, primary.length);
+    const primScore    = primary.length > 0
+      ? Math.min(1, primMatched.length / primBenchmark)
+      : 1.0; // no primary configured → don't penalise
 
+    // ── Secondary skills — small bonus only ────────────────────────────────
     const secHits  = secondary.filter(kw => matchKeyword(kw, jobTitle, jobRaw).matched);
-    const secBonus = Math.min(0.08, secHits.length * 0.025);
+    const secBonus = Math.min(0.07, secHits.length * 0.025);
 
-    const allResults = [...critResults.filter(r=>r.matched), ...primMatched];
-    const titleHits  = allResults.filter(r => r.inTitle);
+    // ── Title-hit bonus — skill in job title = strong confirmation signal ──
+    const allMatchedResults = [...critResults.filter(r=>r.matched), ...primMatched];
+    const titleHits = allMatchedResults.filter(r => r.inTitle);
+    const titleBonus = Math.min(0.08, titleHits.length * 0.04);
 
-    const totalTracked = critical.length + primary.length;
-    const matchScore   = totalTracked > 0
-      ? (critResults.filter(r=>r.matched).length * 1.4 + primMatched.length) / totalTracked
-      : 0;
+    // ── Combine ─────────────────────────────────────────────────────────────
+    // If both critical and primary configured: weight 60/35 split.
+    // If only one type configured: that type carries 90% of the value.
+    let value;
+    if (critical.length > 0 && primary.length > 0) {
+      value = critScore * 0.60 + primScore * 0.35;
+    } else if (critical.length > 0) {
+      value = critScore * 0.90;
+    } else {
+      value = primScore * 0.90;
+    }
+    value = Math.min(1, value + secBonus + titleBonus);
 
-    const value = Math.min(1, matchScore + secBonus + (titleHits.length * 0.05));
-
+    // ── Status thresholds — realistic for card-data partial visibility ──────
     let status;
-    if (value >= 0.72)  status = 'pass';
-    else if (value > 0.35) status = 'partial';
+    if (value >= 0.58) status = 'pass';
+    else if (value >= 0.27) status = 'partial';
     else status = 'fail';
 
-    const allMissing = [...missingCritical, ...primMissing.map(r=>r.kw)];
-
+    // ── Note ────────────────────────────────────────────────────────────────
     const noteparts = [];
-    if (critResults.filter(r=>r.matched).length === critical.length && critical.length)
+    if (critMatchedN === critical.length && critical.length)
       noteparts.push(`All ${critical.length} critical skills found`);
     else if (missingCritical.length)
       noteparts.push(`Missing critical: ${missingCritical.join(', ')}`);
@@ -197,10 +227,34 @@
       name:'Technical skills', status, value, weight:35,
       note: noteparts.join(' · ') || 'No skill overlap found',
       verdict: status==='pass' ? 'Strong match' : status==='partial' ? 'Partial match' : 'Skills gap',
-      matched: [...critResults.filter(r=>r.matched), ...primMatched].map(r=>({kw:r.kw,inTitle:r.inTitle,via:r.via})),
-      missing: allMissing,
+      matched: allMatchedResults.map(r => ({kw:r.kw, inTitle:r.inTitle, via:r.via})),
+      missing: [...missingCritical, ...primMissing.map(r=>r.kw)],
       missingCritical,
     };
+  }
+
+  // ── Role categories — semantic groupings for related-title matching ─────────
+  // Prevents "Backend Engineer" from failing against "Software Engineer" target.
+  // When job title and target role share a category → treat as related role (partial+).
+  const ROLE_CATEGORIES = [
+    ['software engineer','developer','programmer','engineer','swe','sde'],
+    ['backend','back-end','server','api developer','php developer','laravel developer',
+     'node developer','python developer','java developer','ruby developer','golang developer'],
+    ['frontend','front-end','ui developer','web developer','react developer',
+     'vue developer','angular developer','javascript developer'],
+    ['full stack','fullstack','full-stack'],
+    ['devops','sre','platform engineer','cloud engineer','infrastructure'],
+    ['mobile','android','ios','flutter developer','react native'],
+    ['data engineer','data scientist','ml engineer','machine learning','ai engineer','data analyst'],
+    ['qa','quality assurance','test engineer','sdet','automation engineer','qa engineer'],
+    ['product manager','product owner','pm','product lead'],
+  ];
+
+  function sameRoleCategory(a, b) {
+    const al = a.toLowerCase(); const bl = b.toLowerCase();
+    return ROLE_CATEGORIES.some(cat =>
+      cat.some(t => al.includes(t)) && cat.some(t => bl.includes(t))
+    );
   }
 
   // 2. Role alignment — 20%
@@ -219,10 +273,17 @@
       if (s > best) { best = s; bestRole = role; }
     }
 
+    // Category match — e.g. "Backend Engineer" vs "Software Engineer"
+    // Score as strong partial even if word overlap is low
+    const sameCat = targetRoles.find(r => sameRoleCategory(jobTitle, r));
+
     if (best >= 0.7) return { name:'Role alignment', status:'pass', value:1.0, weight:20,
       verdict:'Direct match', note:`"${jobTitle}" matches your target "${bestRole}"` };
-    if (best >= 0.35) return { name:'Role alignment', status:'partial', value:0.55, weight:20,
-      verdict:'Related role', note:`Partial overlap with "${bestRole}"` };
+    if (best >= 0.35 || sameCat) {
+      const roleVal = best >= 0.5 ? 0.75 : 0.55;
+      return { name:'Role alignment', status:'partial', value:roleVal, weight:20,
+        verdict:'Related role', note:`Related to your target "${sameCat || bestRole}"` };
+    }
     return { name:'Role alignment', status:'fail', value:0, weight:20,
       verdict:'Role mismatch', note:`"${jobTitle}" doesn't match your targets (${targetRoles.slice(0,2).join(', ')})` };
   }
@@ -418,27 +479,31 @@
 
     const skillCrit       = criteria.find(c=>c.name==='Technical skills');
     const missingCritical = skillCrit?.missingCritical || [];
-    score = Math.max(0, score - missingCritical.length * 18);
+    // Reduced from -18 to -8 per missing critical skill.
+    // The skills component (35% weight) already reflects missing criticals via
+    // critScore = critMatched/critical.length. The additional penalty prevents
+    // double-punishment and accounts for the fact that card snippets don't
+    // always contain all required skills even when the full JD does.
+    score = Math.max(0, score - missingCritical.length * 8);
 
     const maxW       = criteria.filter(c=>c.weight>0).reduce((s,c)=>s+c.weight,0);
     const confidence = maxW > 0 ? totalW / maxW : 0;
 
+    // ── Label thresholds — green ≥ 70, amber 50–69, red < 50 ────────────────
+    // Only force red when ALL critical skills are absent (0 of N found) —
+    // not for 1 missing out of 3, which already depressed the skills score.
+    // Matching 2/3 critical skills is still a good candidate.
+    const allCritMissing = missingCritical.length > 0
+      && missingCritical.length === (criteria.find(c=>c.name==='Technical skills')?.missingCritical?.length || 0)
+      && critical.length > 0
+      && missingCritical.length === critical.length;
+
     let label;
-    if (missingCritical.length >= 2) {
-      // Two or more non-negotiable skills absent — always red regardless of score.
-      // The 18pt-per-skill deduction already affects the number; this override
-      // exists because a job missing 2+ critical requirements is a genuine skip
-      // even if everything else scores well.
-      label = 'red';
-    } else {
-      // Score-only thresholds — consistent with the AI backend in groqClient.ts.
-      // The single missing-critical penalty is already baked into the score
-      // (-18pts) so no separate label override is needed here.
-      label = score >= 70 ? 'green' : score >= 50 ? 'amber' : 'red';
-    }
+    if (allCritMissing)      label = 'red';
+    else label = score >= 70 ? 'green' : score >= 50 ? 'amber' : 'red';
 
     const textMap = [
-      [85,'Exceptional fit'],[75,'Strong match'],[65,'Good match'],
+      [88,'Exceptional fit'],[75,'Strong match'],[65,'Good match'],
       [50,'Partial match'],  [35,'Weak fit'],    [0, 'Poor fit'],
     ];
     const text = confidence < 0.35
