@@ -437,7 +437,7 @@
 
   // ── Main entry ────────────────────────────────────────────────────────────
   function scoreJob(jobData, profile) {
-    if (!profile) return _empty('Open JobSift and set up your profile');
+    if (!profile) return _empty('Open Rolevance and set up your profile');
 
     const critical  = profile.mustHaveSkills  || [];
     const primary   = profile.primarySkills   || [];

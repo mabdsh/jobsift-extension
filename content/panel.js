@@ -566,8 +566,8 @@
 
     showPanel(anchor, result, jobData, panelCheckResult);
 
-    if (_panel && typeof window._jobsiftOnPanelOpen === 'function') {
-      window._jobsiftOnPanelOpen(jobData, _panel, anchor, panelCheckResult, result);
+    if (_panel && typeof window._rolevanceOnPanelOpen === 'function') {
+      window._rolevanceOnPanelOpen(jobData, _panel, anchor, panelCheckResult, result);
     }
   }
 

@@ -324,7 +324,7 @@ function renderAll() {
 
 // ── Load / apply ──────────────────────────────────────────────────────────────
 async function load() {
-  return new Promise(r => chrome.storage.local.get('jobsift', d => r(d.jobsift || null)));
+  return new Promise(r => chrome.storage.local.get('rolevance', d => r(d.rolevance || null)));
 }
 
 function applyProfile(p) {
@@ -380,7 +380,7 @@ function setAutoSaveStatus(state) {
 
 // ── Save ──────────────────────────────────────────────────────────────────────
 // CRITICAL FIX: reads existing storage first and spreads it before saving.
-// The previous version did `chrome.storage.local.set({ jobsift: { profile } })`
+// The previous version did `chrome.storage.local.set({ rolevance: { profile } })`
 // which silently dropped deviceId on every save, breaking AI scoring.
 async function save(silent = false) {
   const profile = {
@@ -410,7 +410,7 @@ async function save(silent = false) {
       return;
     }
 
-    await chrome.storage.local.set({ jobsift: { ...existing, profile } });
+    await chrome.storage.local.set({ rolevance: { ...existing, profile } });
 
     if (silent) {
       // Auto-save: show subtle inline status, no toast
@@ -437,7 +437,7 @@ async function save(silent = false) {
         if (chrome.runtime.lastError) return;
         if (res?.ok) {
           const current = await load() || {};
-          await chrome.storage.local.set({ jobsift: { ...current, email: emailVal } });
+          await chrome.storage.local.set({ rolevance: { ...current, email: emailVal } });
           showEmailSaved(true);
         }
       });
@@ -571,7 +571,7 @@ function showMsg(id, text, type) {
 // ── Subscription UI ───────────────────────────────────────────────────────────
 async function loadSubscriptionStatus() {
   return new Promise(resolve => {
-    chrome.storage.local.get('jobsift_sub', d => resolve(d.jobsift_sub || null));
+    chrome.storage.local.get('rolevance_sub', d => resolve(d.rolevance_sub || null));
   });
 }
 
@@ -705,11 +705,11 @@ function setupUpgradeUI() {
 }
 
 // ── Job Tracker ────────────────────────────────────────────────────────────────
-// All tracker state lives in chrome.storage.local under 'jobsift_tracker'.
+// All tracker state lives in chrome.storage.local under 'rolevance_tracker'.
 // popup.js reads/writes storage directly — no content script bridge needed
 // since the popup runs in its own isolated extension page context.
 
-const TRACKER_KEY    = 'jobsift_tracker';
+const TRACKER_KEY    = 'rolevance_tracker';
 let   _trackerFilter = 'all';
 
 // ── Storage helpers ────────────────────────────────────────────────────────────

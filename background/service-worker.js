@@ -10,7 +10,7 @@ const CLIENT_SECRET = '6fc521c67954cc87dee87f91b8def0811149c094b4f87594805485a1f
 // Neither is sensitive — the store subdomain and variant ID are publicly
 // visible in any checkout URL. The checkout is opened directly from the
 // extension so it works even when the backend is unavailable.
-const LS_STORE_SUBDOMAIN = 'YOUR_STORE_SUBDOMAIN';   // e.g. 'myjobsift'
+const LS_STORE_SUBDOMAIN = 'YOUR_STORE_SUBDOMAIN';   // e.g. 'myrolevance'
 const LS_VARIANT_ID      = 'YOUR_VARIANT_ID';         // e.g. '123456'
 
 const SUB_STATUS_TTL_MS  = 60 * 60 * 1000;
@@ -49,15 +49,15 @@ chrome.runtime.onInstalled.addListener(async ({ reason }) => {
   }
 
   const existing = await new Promise(r =>
-    chrome.storage.local.get('jobsift', d => r(d.jobsift || null))
+    chrome.storage.local.get('rolevance', d => r(d.rolevance || null))
   );
   if (reason === 'install' || !existing) {
     await chrome.storage.local.set({
-      jobsift: { ...DEFAULT_DATA, deviceId: crypto.randomUUID() }
+      rolevance: { ...DEFAULT_DATA, deviceId: crypto.randomUUID() }
     });
   } else if (!existing.deviceId) {
     await chrome.storage.local.set({
-      jobsift: { ...existing, deviceId: crypto.randomUUID() }
+      rolevance: { ...existing, deviceId: crypto.randomUUID() }
     });
   }
   fetchAndCacheSubStatus();
@@ -72,7 +72,7 @@ chrome.alarms.onAlarm.addListener(alarm => {
 // ── Device ID helper ───────────────────────────────────────────────────────────
 async function getDeviceId() {
   return new Promise(resolve => {
-    chrome.storage.local.get('jobsift', d => resolve(d.jobsift?.deviceId ?? null));
+    chrome.storage.local.get('rolevance', d => resolve(d.rolevance?.deviceId ?? null));
   });
 }
 
@@ -135,7 +135,7 @@ async function fetchAndCacheSubStatus() {
     if (!res.ok) return;
     const data = await res.json();
     await chrome.storage.local.set({
-      jobsift_sub: { ...data, cached_at: Date.now() }
+      rolevance_sub: { ...data, cached_at: Date.now() }
     });
   } catch (_) {}
 }
@@ -166,7 +166,7 @@ function startUpgradePolling() {
     await fetchAndCacheSubStatus();
 
     const cached = await new Promise(r =>
-      chrome.storage.local.get('jobsift_sub', d => r(d.jobsift_sub || null))
+      chrome.storage.local.get('rolevance_sub', d => r(d.rolevance_sub || null))
     );
 
     if (cached?.tier === 'pro') {
@@ -272,8 +272,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
   if (msg.type === 'JS_REFRESH_SUB_STATUS') {
     fetchAndCacheSubStatus()
-      .then(() => chrome.storage.local.get('jobsift_sub', d =>
-        sendResponse({ ok: true, data: d.jobsift_sub || null })
+      .then(() => chrome.storage.local.get('rolevance_sub', d =>
+        sendResponse({ ok: true, data: d.rolevance_sub || null })
       ))
       .catch(() => sendResponse({ ok: false }));
     return true;
@@ -324,7 +324,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         if (!res.ok) { sendResponse({ ok: false, message: data.message || 'Restore failed.' }); return; }
         await fetchAndCacheSubStatus();
         const cached = await new Promise(r =>
-          chrome.storage.local.get('jobsift_sub', d => r(d.jobsift_sub || null))
+          chrome.storage.local.get('rolevance_sub', d => r(d.rolevance_sub || null))
         );
         sendResponse({ ok: true, message: data.message, status: cached });
       } catch (err) {

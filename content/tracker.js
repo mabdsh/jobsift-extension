@@ -8,7 +8,7 @@
   if (window._jsTracker) return;
   window._jsTracker = true;
 
-  const TRACKER_KEY = 'jobsift_tracker';
+  const TRACKER_KEY = 'rolevance_tracker';
   const MAX_ENTRIES = 500;
 
   // ── Storage helpers ────────────────────────────────────────────────────────

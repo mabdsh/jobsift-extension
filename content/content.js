@@ -24,7 +24,7 @@
 
   // ── Preferences ────────────────────────────────────────────────────────────
   async function loadPreferences() {
-    return new Promise(r => chrome.storage.local.get('jobsift', d => r(d.jobsift || null)));
+    return new Promise(r => chrome.storage.local.get('rolevance', d => r(d.rolevance || null)));
   }
 
   // ── Page type detection ────────────────────────────────────────────────────
@@ -129,15 +129,15 @@
   }
 
   function _loadScoreCache() {
-    return new Promise(r => chrome.storage.local.get('jobsift_scores', d => r(d.jobsift_scores || {})));
+    return new Promise(r => chrome.storage.local.get('rolevance_scores', d => r(d.rolevance_scores || {})));
   }
 
   function _saveScoreCache(cache) {
-    chrome.storage.local.set({ jobsift_scores: cache });
+    chrome.storage.local.set({ rolevance_scores: cache });
   }
 
   function _clearScoreCache() {
-    chrome.storage.local.remove('jobsift_scores');
+    chrome.storage.local.remove('rolevance_scores');
   }
 
   // ── Search page: Phase 1 — inject loading badges ───────────────────────────
@@ -505,7 +505,7 @@
   //   limit === null  → Pro / Trial (unlimited)
   //   limit !== null  → Free (capped) — ai-analyzer shows upgrade teaser
   // result: the rule-based scoring result — used to personalise the teaser
-  window._jobsiftOnPanelOpen = async function (jobData, panelEl, anchor, panelCheckResult, result) {
+  window._rolevanceOnPanelOpen = async function (jobData, panelEl, anchor, panelCheckResult, result) {
     await _ensureLinkedInJobLoaded(jobData.jobId);
 
     if (typeof window.analyzeJobDeep === 'function') {
@@ -755,8 +755,8 @@
 
   function listenForChanges() {
     chrome.storage.onChanged.addListener((changes, area) => {
-      if (area === 'local' && changes.jobsift) {
-        const newPrefs = changes.jobsift.newValue;
+      if (area === 'local' && changes.rolevance) {
+        const newPrefs = changes.rolevance.newValue;
 
         const oldHash = _profileHash(_prefs?.profile);
         const newHash = _profileHash(newPrefs?.profile);
