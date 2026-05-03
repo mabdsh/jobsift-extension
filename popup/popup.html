@@ -3,31 +3,31 @@
 <head>
   <meta charset="UTF-8">
   <title>Rolevance</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
 <div class="app">
 
-  <!-- ── Header — dark navy, brand mark mirrors the extension icon ───────── -->
+  <!-- ── Header ──────────────────────────────────────────────────────────────── -->
   <header class="header">
     <div class="brand">
       <div class="brand-mark">
-        <svg viewBox="0 0 18 18" fill="none" width="16" height="16">
-          <circle cx="9" cy="9" r="6.5" fill="none" stroke="#6EE7B7" stroke-width="1.3"/>
-          <circle cx="10.4" cy="7.6" r="2.4" fill="#059669"/>
+        <svg viewBox="0 0 18 18" fill="none" width="14" height="14">
+          <circle cx="9" cy="9" r="7" stroke="#6EE7B7" stroke-width="1.3"/>
+          <circle cx="9" cy="9" r="3.5" fill="#059669"/>
+          <path d="M7.2 9l1.5 1.5 2.5-2.5" stroke="#fff" stroke-width="1.2"
+                stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
+        <span id="brandActiveDot" class="brand-dot"></span>
       </div>
       <span class="brand-name">Rolevance</span>
-      <span id="proBadge" class="pro-badge" style="display:none">PRO</span>
+      <span id="proBadge" class="pro-badge" style="display:none"></span>
     </div>
-    <div id="statusPill" class="status-pill">Open LinkedIn Jobs</div>
+    <div id="headerAction" class="header-action"></div>
   </header>
 
-  <!-- ── Tab bar ──────────────────────────────────────────────────────────── -->
-  <div class="tab-bar" id="tabBar" role="tablist">
+  <!-- ── Tab bar — hidden until main content is shown ───────────────────────── -->
+  <div class="tab-bar" id="tabBar" style="display:none" role="tablist">
     <div class="tab-track">
       <button class="tab-btn tab-btn--active" id="tabProfile"
               data-tab="profile" role="tab" aria-selected="true">Profile</button>
@@ -38,99 +38,126 @@
     </div>
   </div>
 
-  <!-- ══════════════════════════════════════════════════════════════════════
-       ONBOARDING SCREEN
-       Shown only to new users (empty profile). Replaces the main content
-       until the user clicks "Set up" or "Skip". Dismissed in popup.js.
-  ══════════════════════════════════════════════════════════════════════ -->
-  <div id="onboarding" class="onboarding" style="display:none" role="main" aria-label="Welcome to Rolevance">
+  <!-- ══════════════════════════════════════════════════════════════════════════
+       ONBOARDING — Concept C: Brand identity hero + slide-up CTA panel
+       Dark green hero with animated brand mark, white CTA panel below.
+  ══════════════════════════════════════════════════════════════════════════ -->
+  <div id="onboarding" class="onboarding" style="display:none" role="main">
 
-    <!-- Mark -->
-    <div class="onb-mark">
-      <svg viewBox="0 0 72 72" fill="none" width="72" height="72">
-        <circle cx="36" cy="36" r="28" fill="none" stroke="#6EE7B7" stroke-width="2.4"/>
-        <circle cx="42" cy="30" r="11" fill="#059669"/>
-      </svg>
-    </div>
+    <!-- Dark hero section -->
+    <div class="onb-hero-dark">
+      <div class="onb-grid"></div>
+      <div class="onb-glow"></div>
 
-    <!-- Headline -->
-    <h1 class="onb-title">Find roles that actually fit</h1>
-    <p class="onb-desc">Rolevance scores every LinkedIn and Indeed listing against your profile — instantly, as you browse.</p>
+      <div class="onb-hero-content">
 
-    <!-- Steps -->
-    <div class="onb-steps">
-      <div class="onb-step">
-        <div class="onb-step-icon">
-          <svg viewBox="0 0 16 16" fill="none" width="14" height="14">
-            <rect x="2" y="2" width="12" height="12" rx="2" stroke="#059669" stroke-width="1.4"/>
-            <path d="M5 8h6M5 5.5h4M5 10.5h3" stroke="#059669" stroke-width="1.3" stroke-linecap="round"/>
-          </svg>
+        <!-- Brand mark: concentric rings + orbiting score badges -->
+        <div class="onb-mark">
+          <div class="onb-ring-outer"></div>
+          <div class="onb-ring-mid"></div>
+          <div class="onb-ring-center">
+            <div class="onb-ring-core">
+              <svg viewBox="0 0 20 20" fill="none" width="14" height="14">
+                <path d="M4.5 10.5l4 4 7-8" stroke="#fff" stroke-width="2.2"
+                      stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+          </div>
+          <div class="onb-orb onb-orb--green">
+            <span class="onb-orb-num">87</span>
+            <span class="onb-orb-lbl">match</span>
+          </div>
+          <div class="onb-orb onb-orb--amber">
+            <span class="onb-orb-num">54</span>
+            <span class="onb-orb-lbl">partial</span>
+          </div>
+          <div class="onb-orb onb-orb--red">
+            <span class="onb-orb-num">21</span>
+            <span class="onb-orb-lbl">skip</span>
+          </div>
         </div>
-        <div class="onb-step-body">
-          <div class="onb-step-title">Paste your CV or bio</div>
-          <div class="onb-step-sub">AI fills every field in seconds</div>
+
+        <div class="onb-eyebrow">AI-powered job matching</div>
+        <h1 class="onb-title">
+          Stop opening jobs<br>
+          <em>that don't fit.</em>
+        </h1>
+        <p class="onb-desc">
+          Rolevance scores every LinkedIn and Indeed listing against your
+          profile — before you click. Know your match instantly.
+        </p>
+
+        <!-- Match tier pills -->
+        <div class="onb-pills">
+          <div class="onb-pill onb-pill--green">
+            <span class="onb-pill-dot"></span>Strong match
+          </div>
+          <div class="onb-pill onb-pill--amber">
+            <span class="onb-pill-dot"></span>Partial fit
+          </div>
+          <div class="onb-pill onb-pill--red">
+            <span class="onb-pill-dot"></span>Skip this one
+          </div>
         </div>
+
       </div>
-      <div class="onb-step">
-        <div class="onb-step-icon">
-          <svg viewBox="0 0 16 16" fill="none" width="14" height="14">
-            <circle cx="8" cy="8" r="5.5" stroke="#059669" stroke-width="1.4"/>
-            <path d="M8 5.5v2.8l1.8 1.8" stroke="#059669" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </div>
-        <div class="onb-step-body">
-          <div class="onb-step-title">Review in 2 minutes</div>
-          <div class="onb-step-sub">Tune skills, salary &amp; deal-breakers</div>
-        </div>
-      </div>
-      <div class="onb-step">
-        <div class="onb-step-icon">
-          <svg viewBox="0 0 16 16" fill="none" width="14" height="14">
-            <path d="M3 8.5l3 3 7-7" stroke="#059669" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </div>
-        <div class="onb-step-body">
-          <div class="onb-step-title">Scores appear on every listing</div>
-          <div class="onb-step-sub">LinkedIn Jobs and Indeed — both covered</div>
-        </div>
-      </div>
-    </div>
+    </div><!-- /onb-hero-dark -->
 
-    <button id="onbStartBtn" class="onb-cta">Set up my profile →</button>
-    <button id="onbSkipBtn"  class="onb-skip">I’ll explore first</button>
+    <!-- Slide-up CTA panel -->
+    <div class="onb-cta-panel">
+      <div class="onb-handle"></div>
+      <div class="onb-cta-title">Start your free 7-day trial</div>
 
-    <!-- Quick-open links -->
-    <div class="onb-links">
-      <a class="onb-link" href="https://www.linkedin.com/jobs/" target="_blank" rel="noopener">
-        <svg viewBox="0 0 16 16" fill="none" width="12" height="12">
-          <rect x="1" y="1" width="14" height="14" rx="2.5" fill="#0A66C2"/>
-          <path d="M4.5 6.5v5M4.5 4.2v.6M7 6.5v5M7 8.5c0-1 .7-2 2-2s2 1 2 2v2.5" stroke="#fff" stroke-width="1.2" stroke-linecap="round"/>
-        </svg>
-        LinkedIn Jobs
-      </a>
-      <span class="onb-links-div"></span>
-      <a class="onb-link" href="https://www.indeed.com/jobs" target="_blank" rel="noopener">
-        <svg viewBox="0 0 16 16" fill="none" width="12" height="12">
-          <rect x="1" y="1" width="14" height="14" rx="2.5" fill="#003A9B"/>
-          <path d="M5.5 8a2.5 2.5 0 105 0 2.5 2.5 0 00-5 0zM9.5 11l1.5 1.5" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/>
-        </svg>
-        Indeed
-      </a>
-    </div>
+      <div class="onb-email-wrap">
+        <input type="email" id="onbEmail" class="onb-email-inp"
+               placeholder="your@email.com" autocomplete="email">
+        <span class="onb-email-icon">
+          <svg viewBox="0 0 16 16" fill="none" width="14" height="14">
+            <rect x="2" y="4" width="12" height="9" rx="1.5"
+                  stroke="currentColor" stroke-width="1.3"/>
+            <path d="M2 5.5l6 4 6-4" stroke="currentColor"
+                  stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+        </span>
+      </div>
+
+      <button id="onbTrialBtn" class="onb-cta" type="button">
+        Start free trial &amp; set up profile &#8594;
+      </button>
+
+      <div id="onbTrialMsg" class="msg msg--hidden" role="alert" aria-live="polite"></div>
+
+      <div class="onb-legal-row">
+        <span>No credit card</span>
+        <span class="onb-legal-dot"></span>
+        <span>7 days free</span>
+        <span class="onb-legal-dot"></span>
+        <span>Resets to free plan</span>
+      </div>
+
+      <div class="onb-or-divider"><span>or</span></div>
+
+      <button id="onbSkipBtn" class="onb-skip" type="button">
+        Continue with free plan — 3 panels &amp; analyses per day
+      </button>
+    </div><!-- /onb-cta-panel -->
 
   </div><!-- /onboarding -->
 
-  <!-- ══════════════════════════════════════════════════════════════════════
-       MAIN CONTENT
-       Wrapped in #mainContent so one toggle hides everything below
-       the header while the onboarding screen is active.
-  ══════════════════════════════════════════════════════════════════════ -->
-  <div id="mainContent" style="display:contents">
+  <!-- ══════════════════════════════════════════════════════════════════════════
+       MAIN CONTENT (profile form + dashboard)
+  ══════════════════════════════════════════════════════════════════════════ -->
+  <div id="mainContent" style="display:none; flex:1; flex-direction:column; min-height:0; overflow:hidden">
 
-    <!-- Scroll area -->
+    <!-- ── Dashboard — shown to returning users ──────────────────────────────── -->
+    <div id="dashboard" class="dashboard" style="display:none">
+      <!-- Content injected by renderDashboard() -->
+    </div>
+
+    <!-- ── Profile / Skills / Filters accordion ──────────────────────────────── -->
     <div class="scroll-area" id="scrollArea">
 
-      <!-- ── Profile section ────────────────────────────────────────────── -->
+      <!-- ── Profile ───────────────────────────────────────────────────────── -->
       <div class="acc-section open" id="acc-profile">
         <button class="acc-header" type="button">
           <div class="acc-header-left">
@@ -149,16 +176,19 @@
         <div class="acc-body">
           <div class="acc-content" id="pane-profile">
 
+            <!-- AI Auto-fill card -->
             <div class="ai-card">
-              <span class="ai-label">
-                <svg viewBox="0 0 16 16" fill="currentColor" width="10" height="10">
-                  <path d="M8 1l1.8 3.6L14 5.3l-3 2.9.7 4.1L8 10.1l-3.7 2.2.7-4.1L2 5.3l4.2-.7L8 1z"/>
-                </svg>
-                AI Auto-fill
-              </span>
-              <label class="field-lbl" for="desc">Describe your job search</label>
+              <div class="ai-card-header">
+                <span class="ai-label">
+                  <svg viewBox="0 0 16 16" fill="currentColor" width="9" height="9">
+                    <path d="M8 1l1.8 3.6L14 5.3l-3 2.9.7 4.1L8 10.1l-3.7 2.2.7-4.1L2 5.3l4.2-.7L8 1z"/>
+                  </svg>
+                  AI Auto-fill
+                </span>
+                <span class="ai-card-hint">Paste your CV, bio, or describe what you want</span>
+              </div>
               <textarea id="desc" class="desc-area" rows="3"
-                placeholder="e.g. Senior Laravel dev, 5 yrs exp, remote, min $80K. Must know Laravel &amp; Vue. No blockchain or gambling."></textarea>
+                placeholder="e.g. Senior Laravel dev, 5 yrs exp, remote-first, min $80K. Must have Laravel &amp; Vue. No blockchain or gambling."></textarea>
               <button id="autoFillBtn" class="autofill-btn" disabled>
                 <svg viewBox="0 0 16 16" fill="currentColor" width="11" height="11">
                   <path d="M8 1l1.8 3.6L14 5.3l-3 2.9.7 4.1L8 10.1l-3.7 2.2.7-4.1L2 5.3l4.2-.7L8 1z"/>
@@ -196,7 +226,7 @@
                 <div class="taglist" id="rolesTags"></div>
                 <input class="taginp" id="rolesInp" placeholder="Laravel Developer, Backend Engineer…">
               </div>
-              <p class="field-hint">Press Enter · Jobs matching these rank higher</p>
+              <p class="field-hint">Press Enter to add · jobs matching these titles rank higher</p>
             </div>
 
             <div class="field">
@@ -222,10 +252,9 @@
               </div>
             </div>
 
-            <!-- Email — cross-device restore + trial notifications -->
             <div class="field email-field">
               <label class="field-lbl" for="userEmail">
-                Email <span class="lbl-sub">optional</span>
+                Email <span class="lbl-sub">optional — restores access after reinstall</span>
               </label>
               <div class="email-row">
                 <input id="userEmail" class="inp email-inp" type="email"
@@ -238,14 +267,13 @@
                   Saved
                 </span>
               </div>
-              <p class="field-hint">Restore access after reinstall or device change</p>
             </div>
 
           </div>
         </div>
       </div>
 
-      <!-- ── Skills section ─────────────────────────────────────────────── -->
+      <!-- ── Skills ─────────────────────────────────────────────────────────── -->
       <div class="acc-section" id="acc-skills">
         <button class="acc-header" type="button">
           <div class="acc-header-left">
@@ -267,43 +295,41 @@
 
             <div class="skill-tier tier--critical">
               <div class="tier-hdr">
-                <div class="tier-dot tier-dot--amber"></div>
-                <div class="tier-info">
-                  <div class="tier-name">Critical <span class="tier-cap">max 4</span></div>
-                  <div class="tier-hint">Score capped if any are missing</div>
+                <div class="tier-badge tier-badge--crit">Critical</div>
+                <div class="tier-meta">
+                  <span class="tier-cap">max 4</span>
+                  <span class="tier-impact tier-impact--crit">Score capped if any are absent</span>
                 </div>
               </div>
               <div class="tagbox tagbox--critical" id="criticalBox">
                 <div class="taglist" id="criticalTags"></div>
-                <input class="taginp" id="criticalInp" placeholder="Laravel, Vue.js…">
+                <input class="taginp" id="criticalInp" placeholder="Laravel, Vue.js, Docker…">
               </div>
             </div>
 
-            <div class="skill-tier">
+            <div class="skill-tier tier--primary">
               <div class="tier-hdr">
-                <div class="tier-dot tier-dot--blue"></div>
-                <div class="tier-info">
-                  <div class="tier-name">Primary</div>
-                  <div class="tier-hint">Expert-level · drives 35% of score</div>
+                <div class="tier-badge tier-badge--prim">Primary</div>
+                <div class="tier-meta">
+                  <span class="tier-impact tier-impact--prim">Expert-level · drives 35% of every score</span>
                 </div>
               </div>
               <div class="tagbox" id="primaryBox">
                 <div class="taglist" id="primaryTags"></div>
-                <input class="taginp" id="primaryInp" placeholder="PHP, MySQL, Docker, Redis…">
+                <input class="taginp" id="primaryInp" placeholder="PHP, MySQL, Redis, AWS…">
               </div>
             </div>
 
-            <div class="skill-tier">
+            <div class="skill-tier tier--secondary">
               <div class="tier-hdr">
-                <div class="tier-dot tier-dot--gray"></div>
-                <div class="tier-info">
-                  <div class="tier-name">Secondary</div>
-                  <div class="tier-hint">Nice-to-have · bonus points only</div>
+                <div class="tier-badge tier-badge--sec">Secondary</div>
+                <div class="tier-meta">
+                  <span class="tier-impact">Familiar but not expert · bonus points only</span>
                 </div>
               </div>
               <div class="tagbox" id="secondaryBox">
                 <div class="taglist" id="secondaryTags"></div>
-                <input class="taginp" id="secondaryInp" placeholder="GraphQL, Kubernetes…">
+                <input class="taginp" id="secondaryInp" placeholder="GraphQL, Kubernetes, Terraform…">
               </div>
             </div>
 
@@ -311,7 +337,7 @@
         </div>
       </div>
 
-      <!-- ── Filters section ────────────────────────────────────────────── -->
+      <!-- ── Filters ────────────────────────────────────────────────────────── -->
       <div class="acc-section" id="acc-filters">
         <button class="acc-header" type="button">
           <div class="acc-header-left">
@@ -333,7 +359,7 @@
             <div class="filter-block">
               <div class="filter-block-hdr">
                 <span class="filter-block-title">Keywords to avoid</span>
-                <span class="filter-block-desc">Any match → score drops to 0</span>
+                <span class="filter-badge filter-badge--red">Score → 0 on match</span>
               </div>
               <div class="tagbox tagbox--danger" id="dealBox">
                 <div class="taglist" id="dealTags"></div>
@@ -344,20 +370,12 @@
             <div class="filter-block">
               <div class="filter-block-hdr">
                 <span class="filter-block-title">Industries to avoid</span>
-                <span class="filter-block-desc">Flags listings in these sectors</span>
+                <span class="filter-badge">Flags matching listings</span>
               </div>
               <div class="tagbox tagbox--danger" id="avoidBox">
                 <div class="taglist" id="avoidTags"></div>
                 <input class="taginp" id="avoidInp" placeholder="Gaming, Crypto, Defense…">
               </div>
-            </div>
-
-            <div class="filter-note">
-              <svg viewBox="0 0 14 14" fill="none" width="12" height="12" style="flex-shrink:0;margin-top:1px">
-                <circle cx="7" cy="7" r="5.5" stroke="#9CA3AF" stroke-width="1.2"/>
-                <path d="M7 6v3.5M7 4.5v.3" stroke="#9CA3AF" stroke-width="1.3" stroke-linecap="round"/>
-              </svg>
-              Deal-breakers apply before AI scoring — matched jobs score 0 regardless.
             </div>
 
           </div>
@@ -366,49 +384,7 @@
 
     </div><!-- /scroll-area -->
 
-    <!-- Upgrade section — hidden by default, shown when paywall on + free tier -->
-    <div id="upgradeSection" class="upgrade-section" style="display:none">
-      <div class="upgrade-banner">
-        <div class="upgrade-info">
-          <div class="upgrade-title">Upgrade to Pro</div>
-          <div class="upgrade-limits">Unlimited panels · Full AI analysis · Cancel anytime</div>
-        </div>
-        <button class="upgrade-cta" id="upgradeBtn">$7/mo →</button>
-      </div>
-      <div class="upgrade-proof">🔒 Early access · founding member rate</div>
-      <div class="restore-area">
-        <button class="restore-toggle-btn" id="restoreToggleBtn" type="button">Already subscribed? Restore access</button>
-        <div id="restoreForm" style="display:none">
-          <div class="restore-row">
-            <input type="email" id="restoreEmail" class="inp" placeholder="your@email.com" style="flex:1">
-            <button class="restore-submit" id="restoreBtn" type="button">Restore</button>
-          </div>
-          <div id="restoreMsg" class="msg msg--hidden" role="alert"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Manage billing section — shown only when user is on Pro tier -->
-    <div id="manageBillingSection" class="manage-billing-section" style="display:none">
-      <div class="manage-billing-inner">
-        <div class="manage-billing-left">
-          <svg viewBox="0 0 14 14" fill="none" width="12" height="12">
-            <path d="M2 7.5l3.5 3.5 6.5-7" stroke="#16a34a" stroke-width="1.8"
-                  stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          <span class="manage-billing-label">Pro plan · active</span>
-        </div>
-        <a id="manageBillingLink"
-           href="https://app.lemonsqueezy.com/my-orders"
-           class="manage-billing-link"
-           target="_blank"
-           rel="noopener noreferrer">
-          Manage billing →
-        </a>
-      </div>
-    </div>
-
-    <!-- Footer — dark navy, matches header -->
+    <!-- ── Footer ──────────────────────────────────────────────────────────── -->
     <footer class="footer">
       <div class="progress-row">
         <div class="progress-meta">
@@ -422,72 +398,10 @@
       </div>
     </footer>
 
-    <!-- ── Dashboard ───────────────────────────────────────────────────────
-         Shown to returning users on popup open. Hides when user clicks
-         "Configure profile" — scroll-area (accordion) is shown instead.
-    ─────────────────────────────────────────────────────────────────────── -->
-    <div id="dashboard" class="dashboard" style="display:none">
-
-      <!-- Completeness ring -->
-      <div class="dash-ring-wrap">
-        <svg class="dash-ring-svg" viewBox="0 0 104 104" width="96" height="96">
-          <circle cx="52" cy="52" r="42" fill="none" stroke="#D0E8DC" stroke-width="7"/>
-          <circle id="dashRingArc" cx="52" cy="52" r="42" fill="none"
-                  stroke="#059669" stroke-width="7" stroke-linecap="round"
-                  stroke-dasharray="263.9" stroke-dashoffset="263.9"
-                  transform="rotate(-90 52 52)"/>
-          <text id="dashPct" x="52" y="58" text-anchor="middle"
-                style="font-size:19px;font-weight:800;fill:#0A1A12;font-family:-apple-system,BlinkMacSystemFont,'DM Sans',sans-serif;letter-spacing:-0.5px">
-            0%
-          </text>
-        </svg>
-        <p class="dash-ring-lbl" id="dashRingLbl">Profile completeness</p>
-      </div>
-
-      <!-- Today's activity stats -->
-      <div class="dash-stats" id="dashStats"></div>
-
-      <!-- Subscription status -->
-      <div class="dash-status" id="dashStatus"></div>
-
-      <!-- Missing fields -->
-      <div class="dash-missing" id="dashMissing"></div>
-
-      <!-- Quick-open links -->
-      <div class="dash-links">
-        <a class="dash-link dash-link--li" href="https://www.linkedin.com/jobs/"
-           target="_blank" rel="noopener">
-          <svg viewBox="0 0 14 14" width="13" height="13" fill="none">
-            <rect width="14" height="14" rx="2.5" fill="#0A66C2"/>
-            <path d="M4 5.5v5M4 3.5v.5M7 10.5V8a2 2 0 014 0v2.5M7 5.5v5"
-                  stroke="#fff" stroke-width="1.2" stroke-linecap="round"/>
-          </svg>
-          LinkedIn Jobs
-        </a>
-        <a class="dash-link dash-link--in" href="https://www.indeed.com/jobs"
-           target="_blank" rel="noopener">
-          <svg viewBox="0 0 14 14" width="13" height="13" fill="none">
-            <rect width="14" height="14" rx="2.5" fill="#2164F3"/>
-            <text x="7" y="10.5" text-anchor="middle"
-                  style="font-size:8.5px;font-weight:800;fill:#fff;font-family:sans-serif">in</text>
-          </svg>
-          Indeed Jobs
-        </a>
-      </div>
-
-      <!-- Edit profile CTA -->
-      <button class="dash-edit-btn" id="dashEditBtn" type="button">
-        Configure profile →
-      </button>
-
-    </div><!-- /dashboard -->
-
   </div><!-- /mainContent -->
 
-  <!-- ── Tracker pane ─────────────────────────────────────────────────────── -->
+  <!-- ── Tracker pane ───────────────────────────────────────────────────────── -->
   <div id="trackerPane" class="tracker-pane" style="display:none" role="tabpanel">
-
-    <!-- Filter pills -->
     <div class="tk-filters" id="tkFilters">
       <button class="tk-filter-btn tk-filter--active" data-filter="all">
         All <span class="tk-filter-count" id="tkc-all">0</span>
@@ -505,11 +419,8 @@
         Rejected <span class="tk-filter-count" id="tkc-rejected">0</span>
       </button>
     </div>
-
-    <!-- Job list -->
     <div class="tk-list" id="tkList"></div>
-
-  </div><!-- /trackerPane -->
+  </div>
 
 </div><!-- /app -->
 <script src="popup.js"></script>

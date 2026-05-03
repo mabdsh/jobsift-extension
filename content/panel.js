@@ -1,10 +1,6 @@
-// Rolevance Panel v5.2
-// v5.2: Full panel redesign — decision leads header, simplified criteria,
-//       collapsible breakdown, visual AI section differentiation, pull-quote insight
-// v3.2.0: anchor parameter replaces li — panel now works on any container element,
-//         enabling detail page support where the anchor is a dedicated panel-root div.
-// Layout: SVG arc ring → verdict → decision block → quick-facts →
-//         AI analysis → criteria breakdown → tips → footer
+// Rolevance Panel v5.3
+// v5.3: Unified verdict+score pill, SVG quick-fact icons, premium limit panel,
+//       actions column (close top / save below), data-js-score for ai-analyzer.
 
 (function () {
   'use strict';
@@ -15,8 +11,6 @@
   let _badge    = null;
   let _escKey   = null;
   let _checking = false;
-
-  // CIRC removed — circular ring replaced by buildScoreTile()
 
   // ── Helpers ────────────────────────────────────────────────────────────────
   function timeUntilReset(resetAt) {
@@ -29,21 +23,27 @@
     return `${m}m`;
   }
 
-  // ── Save-to-tracker button ─────────────────────────────────────────────────
-  // Created once per panel open. Async-checks if the job is already saved and
-  // updates the button state. Sits in the panel header next to the close button.
+  // ── SVG icon strings for quick facts ──────────────────────────────────────
+  // Small, clean, consistent across all OS. No emoji.
+  const _svg = {
+    remote:  `<svg viewBox="0 0 14 14" fill="none" width="12" height="12"><path d="M2 7.5L7 3l5 4.5" stroke="#059669" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 7v4.5h6V7" stroke="#059669" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+    hybrid:  `<svg viewBox="0 0 14 14" fill="none" width="12" height="12"><rect x="2" y="3" width="10" height="9" rx="1.5" stroke="#059669" stroke-width="1.3"/><path d="M2 7h10M7 3v9" stroke="#059669" stroke-width="1" stroke-dasharray="2 1.5"/></svg>`,
+    onsite:  `<svg viewBox="0 0 14 14" fill="none" width="12" height="12"><rect x="2" y="4" width="10" height="8" rx="1" stroke="#059669" stroke-width="1.3"/><path d="M5 12V9.5h4V12M5 6.5h1M8 6.5h1M5 8.5h1M8 8.5h1" stroke="#059669" stroke-width="1.1" stroke-linecap="round"/></svg>`,
+    salary:  `<svg viewBox="0 0 14 14" fill="none" width="12" height="12"><circle cx="7" cy="7" r="5" stroke="#059669" stroke-width="1.3"/><path d="M7 4.5v5M5.5 5.5h2a1 1 0 010 2H6a1 1 0 000 2h2.5" stroke="#059669" stroke-width="1.1" stroke-linecap="round"/></svg>`,
+    clock:   `<svg viewBox="0 0 14 14" fill="none" width="12" height="12"><circle cx="7" cy="7" r="5" stroke="#059669" stroke-width="1.3"/><path d="M7 4.5v2.8l1.8 1.8" stroke="#059669" stroke-width="1.3" stroke-linecap="round"/></svg>`,
+    location:`<svg viewBox="0 0 14 14" fill="none" width="12" height="12"><path d="M7 2C5.3 2 4 3.3 4 5c0 2.7 3 7 3 7s3-4.3 3-7c0-1.7-1.3-3-3-3z" stroke="#059669" stroke-width="1.3"/><circle cx="7" cy="5" r="1" fill="#059669"/></svg>`,
+  };
+
+  // ── Save button ────────────────────────────────────────────────────────────
   function makeSaveBtn(jobData, result) {
     const btn = document.createElement('button');
     btn.className = 'js-save-btn';
     btn.setAttribute('aria-label', 'Save to tracker');
-    btn.innerHTML = `
-      <svg viewBox="0 0 16 16" fill="none" width="12" height="12">
-        <path d="M12 2H4a1 1 0 00-1 1v11l5-2.5L13 14V3a1 1 0 00-1-1z"
-              stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
-      </svg>
+    btn.innerHTML = `<svg viewBox="0 0 16 16" fill="none" width="11" height="11">
+      <path d="M12 2H4a1 1 0 00-1 1v11l5-2.5L13 14V3a1 1 0 00-1-1z"
+            stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
       <span>Save</span>`;
 
-    // Async check — update to "Saved" state if job already in tracker
     if (jobData.jobId && window.jsTracker) {
       window.jsTracker.isJobSaved(jobData.jobId).then(saved => {
         if (saved) _markSaveBtnSaved(btn);
@@ -57,23 +57,18 @@
       try {
         await window.jsTracker?.saveJob(jobData, result);
         _markSaveBtnSaved(btn);
-      } catch (_) {
-        btn.disabled = false;
-      }
+      } catch (_) { btn.disabled = false; }
     });
-
     return btn;
   }
 
   function _markSaveBtnSaved(btn) {
     btn.classList.add('js-save-btn--saved');
     btn.disabled = false;
-    btn.innerHTML = `
-      <svg viewBox="0 0 16 16" fill="none" width="12" height="12">
-        <path d="M12 2H4a1 1 0 00-1 1v11l5-2.5L13 14V3a1 1 0 00-1-1z"
-              fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
-      </svg>
-      <span>Saved</span>`;
+    btn.innerHTML = `<svg viewBox="0 0 16 16" fill="none" width="11" height="11">
+      <path d="M12 2H4a1 1 0 00-1 1v11l5-2.5L13 14V3a1 1 0 00-1-1z"
+            fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+    </svg><span>Saved</span>`;
   }
 
   function makeCloseBtn() {
@@ -90,72 +85,17 @@
     return n >= 1000 ? `$${Math.round(n / 1000)}K` : `$${n}`;
   }
 
-  // ── SVG arc ring ───────────────────────────────────────────────────────────
-  // Score tile — 48×48 rounded square, consistent with tracker card design system.
-  // Replaces the circular ring which was visually inconsistent and too small
-  // to carry meaning at 52px once demoted from hero to supporting role.
-  function buildScoreTile(label, score) {
-    const hasScore = score !== null && score !== undefined;
-    const tile = document.createElement('div');
-    tile.className = `js-score-tile js-score-tile--${label}`;
-    tile.innerHTML =
-      `<span class="js-score-tile-num">${hasScore ? score : '—'}</span>` +
-      `<span class="js-score-tile-sub">${hasScore ? '/100' : ''}</span>`;
-    return tile;
-  }
-
-  // ── Decision block ─────────────────────────────────────────────────────────
-  function buildDecision(result) {
-    const score    = result.score;
-    const hasScore = score !== null && score !== undefined;
-    const label    = result.label || 'gray';
-    const missing  = result.missingCritical || [];
-
-    let icon, text, sub = null;
-
-    if (!hasScore) {
-      icon = 'ℹ';
-      text = 'Complete your profile to get a match decision';
-    } else if (missing.length) {
-      icon = '⚡';
-      text = `Missing critical: ${missing.slice(0, 3).join(', ')}`;
-      sub  = 'These must-have skills were not found in this listing';
-    } else if (score >= 80) {
-      icon = '✓';
-      text = 'Apply with confidence — strong overall match';
-    } else if (score >= 65) {
-      icon = '→';
-      text = 'Worth applying — review any gaps in the AI analysis below';
-    } else if (score >= 45) {
-      icon = '⚠';
-      text = 'Stretch application — significant gaps present';
-      sub  = 'Apply only if the role is particularly compelling';
-    } else {
-      icon = '✗';
-      text = 'Skip — poor match with your current profile';
-      sub  = 'Better-matched roles are available in your feed';
-    }
-
-    const block = document.createElement('div');
-    block.className = `js-decision js-decision--${label}`;
-    block.innerHTML = `
-      <span class="js-decision-icon">${icon}</span>
-      <div class="js-decision-body">
-        <div class="js-decision-text">${text}</div>
-        ${sub ? `<div class="js-decision-sub">${sub}</div>` : ''}
-      </div>`;
-    return block;
-  }
-
   // ── Quick-facts bar ────────────────────────────────────────────────────────
+  // SVG icon + label + value tiles. No emoji — consistent across all platforms.
   function buildQuickFacts(jobData, result) {
     const facts = [];
 
-    const wtIcons  = { remote: '🏠', hybrid: '🔄', onsite: '🏢' };
     const wtLabels = { remote: 'Remote', hybrid: 'Hybrid', onsite: 'On-site' };
+    const wtSvgs   = { remote: _svg.remote, hybrid: _svg.hybrid, onsite: _svg.onsite };
+
     if (jobData.workType) {
       facts.push({
-        icon:  wtIcons[jobData.workType]  || '📍',
+        svg:   wtSvgs[jobData.workType]   || _svg.location,
         label: 'Work type',
         val:   wtLabels[jobData.workType] || jobData.workType,
       });
@@ -163,7 +103,7 @@
 
     if (jobData.salary?.low != null) {
       facts.push({
-        icon:  '💰',
+        svg:   _svg.salary,
         label: 'Salary',
         val:   `${fmtK(jobData.salary.low)}–${fmtK(jobData.salary.high)}`,
       });
@@ -174,7 +114,7 @@
       const match = expCrit.note.match(/\(([^)]+yrs?)\)/i)
                  || expCrit.note.match(/(\d+[–\-–]+\d+\s*yrs?)/i);
       if (match) {
-        facts.push({ icon: '📅', label: 'Experience', val: match[1] });
+        facts.push({ svg: _svg.clock, label: 'Experience', val: match[1] });
       }
     }
 
@@ -182,44 +122,39 @@
 
     const bar = document.createElement('div');
     bar.className = 'js-quick-facts';
-
     facts.forEach(f => {
       const item = document.createElement('div');
       item.className = 'js-quick-fact';
-      item.innerHTML =
-        `<span class="js-qf-icon">${f.icon}</span>` +
-        `<span class="js-qf-val">${f.val}</span>`;
+      item.innerHTML = `
+        <div class="js-qf-ico-wrap">${f.svg}</div>
+        <div class="js-qf-body">
+          <div class="js-qf-lbl">${f.label}</div>
+          <div class="js-qf-val">${f.val}</div>
+        </div>`;
       bar.appendChild(item);
     });
-
     return bar;
   }
 
   // ── Criterion row ──────────────────────────────────────────────────────────
   function buildRow(c) {
-    // Simplified: background conveys status, no redundant bar or verdict pill
     const row  = document.createElement('div');
     row.className = `js-crit js-crit--${c.status}`;
-
     const icon = document.createElement('span');
     icon.className = 'js-crit-icon';
     icon.textContent = { pass: '✓', partial: '~', fail: '✗', unknown: '·' }[c.status] || '·';
-
     const body = document.createElement('div');
     body.className = 'js-crit-body';
-
     const name = document.createElement('div');
     name.className = 'js-crit-name';
     name.textContent = c.name;
     body.appendChild(name);
-
     if (c.note) {
       const note = document.createElement('div');
       note.className = 'js-crit-note';
       note.textContent = c.note;
       body.appendChild(note);
     }
-
     if (c.matched?.length || c.missing?.length) {
       const chips = document.createElement('div');
       chips.className = 'js-chips';
@@ -237,39 +172,42 @@
       });
       body.appendChild(chips);
     }
-
     row.append(icon, body);
     return row;
   }
 
   // ── Footer text ────────────────────────────────────────────────────────────
   function _buildFooterHTML(pcr) {
-    if (!pcr || !pcr.trial && pcr.limit === null) {
-      return '<strong>Rolevance</strong> · Pro';
+    const brand = '<strong>Rolevance</strong>';
+    if (!pcr || pcr.limit === null) return `${brand} · <span class="js-panel-footer-tier">Pro · unlimited</span>`;
+    if (pcr.trial && pcr.trialDaysLeft != null) {
+      return `${brand} · <span class="js-panel-footer-tier">Trial · ${pcr.trialDaysLeft}d left</span>`;
     }
-    if (pcr.trial && pcr.trialDaysLeft !== null) {
-      return `<strong>Rolevance</strong> · Trial · ${pcr.trialDaysLeft}d remaining`;
-    }
-    if (pcr.limit !== null) {
+    if (pcr.trial) return `${brand} · <span class="js-panel-footer-tier">Trial</span>`;
+    if (typeof pcr.limit === 'number') {
       const remaining = Math.max(0, pcr.limit - (pcr.usedToday || 0));
-      return `<strong>Rolevance</strong> · ${remaining} panel${remaining !== 1 ? 's' : ''} left today`;
+      return `${brand} · <span class="js-panel-footer-tier">${remaining} panel${remaining !== 1 ? 's' : ''} left today</span>`;
     }
-    return '<strong>Rolevance</strong> · Pro';
+    return `${brand} · <span class="js-panel-footer-tier">Pro</span>`;
   }
 
   // ── Limit panel ────────────────────────────────────────────────────────────
+  // Amber light header — consistent with the panel's visual language.
+  // Green upgrade button — on-brand.
   function createLimitPanel(result) {
-    const resets = timeUntilReset(result.resetAt);
-    const limit  = result.limit || 5;
+    const resets  = timeUntilReset(result.resetAt);
+    const limit   = result.limit || (result.trial ? 10 : 3);
+    const isTrial = !!result.trial;
 
     const panel = document.createElement('div');
     panel.className = 'js-panel js-limit-panel';
 
+    // Amber header (not dark navy)
     const hdr = document.createElement('div');
     hdr.className = 'js-lp-hdr';
     hdr.innerHTML = `
       <div class="js-lp-icon">
-        <svg viewBox="0 0 24 24" fill="none" width="22" height="22">
+        <svg viewBox="0 0 24 24" fill="none" width="20" height="20">
           <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.8"/>
           <line x1="12" y1="7" x2="12" y2="13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
           <circle cx="12" cy="16.5" r="1" fill="currentColor"/>
@@ -277,7 +215,11 @@
       </div>
       <div class="js-lp-hdr-text">
         <div class="js-lp-title">Daily limit reached</div>
-        <div class="js-lp-sub">You've used both of your free panels today</div>
+        <div class="js-lp-sub">${
+          isTrial
+            ? `You've reached today's trial panel limit (${limit}/day)`
+            : `You've used all ${limit} of your free panels today`
+        }</div>
       </div>`;
     hdr.appendChild(makeCloseBtn());
     panel.appendChild(hdr);
@@ -293,36 +235,56 @@
       <span>Resets in <strong>${resets}</strong> at midnight UTC</span>`;
     panel.appendChild(timer);
 
-    const plan = document.createElement('div');
-    plan.className = 'js-lp-plan';
-    plan.innerHTML = `
-      <div class="js-lp-plan-label">Your free plan includes</div>
-      <div class="js-lp-plan-limits">
-        <div class="js-lp-limit-item js-lp-limit--used">
-          <span class="js-lp-limit-num">${limit}</span>
-          <span class="js-lp-limit-name">job panels / day</span>
-        </div>
-        <div class="js-lp-limit-item">
-          <span class="js-lp-limit-num">3</span>
-          <span class="js-lp-limit-name">profile parses / day</span>
-        </div>
-        <div class="js-lp-limit-item">
-          <span class="js-lp-limit-num">5</span>
-          <span class="js-lp-limit-name">day free trial included</span>
-        </div>
-      </div>`;
-    panel.appendChild(plan);
+    const planDiv = document.createElement('div');
+    planDiv.className = 'js-lp-plan';
+    if (isTrial) {
+      // Fix: 10 analyses (not 5)
+      planDiv.innerHTML = `
+        <div class="js-lp-plan-label">Your trial includes</div>
+        <div class="js-lp-plan-limits">
+          <div class="js-lp-limit-item js-lp-limit--used">
+            <span class="js-lp-limit-num">${limit}</span>
+            <span class="js-lp-limit-name">panels / day</span>
+          </div>
+          <div class="js-lp-limit-item">
+            <span class="js-lp-limit-num">10</span>
+            <span class="js-lp-limit-name">AI analyses / day</span>
+          </div>
+          <div class="js-lp-limit-item">
+            <span class="js-lp-limit-num">${result.trialDaysLeft ?? '—'}</span>
+            <span class="js-lp-limit-name">days remaining</span>
+          </div>
+        </div>`;
+    } else {
+      planDiv.innerHTML = `
+        <div class="js-lp-plan-label">Your free plan includes</div>
+        <div class="js-lp-plan-limits">
+          <div class="js-lp-limit-item js-lp-limit--used">
+            <span class="js-lp-limit-num">${limit}</span>
+            <span class="js-lp-limit-name">panels / day</span>
+          </div>
+          <div class="js-lp-limit-item">
+            <span class="js-lp-limit-num">3</span>
+            <span class="js-lp-limit-name">AI analyses / day</span>
+          </div>
+          <div class="js-lp-limit-item">
+            <span class="js-lp-limit-num">7</span>
+            <span class="js-lp-limit-name">day free trial</span>
+          </div>
+        </div>`;
+    }
+    panel.appendChild(planDiv);
 
-    const div = document.createElement('div');
-    div.className = 'js-lp-divider';
-    panel.appendChild(div);
+    const divider = document.createElement('div');
+    divider.className = 'js-lp-divider';
+    panel.appendChild(divider);
 
     const upgrade = document.createElement('div');
     upgrade.className = 'js-lp-upgrade';
     upgrade.innerHTML = `
       <div class="js-lp-upgrade-hdr">
         <div class="js-lp-upgrade-title">Rolevance Pro</div>
-        <div class="js-lp-upgrade-price">$9<span>/month</span></div>
+        <div class="js-lp-upgrade-price">$7<span>/month</span></div>
       </div>
       <div class="js-lp-features">
         <div class="js-lp-feature">
@@ -337,7 +299,7 @@
             <path d="M3 8.5l3.5 3.5 6.5-7" stroke="currentColor" stroke-width="1.8"
                   stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
-          <span><strong>Unlimited</strong> AI deep analysis per panel</span>
+          <span><strong>Unlimited</strong> AI coaching per panel</span>
         </div>
         <div class="js-lp-feature">
           <svg viewBox="0 0 16 16" fill="none" width="12" height="12">
@@ -348,9 +310,12 @@
         </div>
       </div>`;
 
+    // Green upgrade button — fixes the blue gradient that was wrong
     const upgradeBtn = document.createElement('button');
     upgradeBtn.className = 'js-lp-upgrade-btn';
-    upgradeBtn.textContent = 'Upgrade to Pro — $9/month';
+    upgradeBtn.textContent = isTrial
+      ? 'Upgrade to Pro — keep unlimited access'
+      : 'Upgrade to Pro — $7/month';
     upgradeBtn.addEventListener('click', e => {
       e.stopPropagation();
       chrome.runtime.sendMessage({ type: 'JS_OPEN_UPGRADE' });
@@ -360,7 +325,7 @@
 
     const footer = document.createElement('div');
     footer.className = 'js-panel-footer js-lp-footer';
-    footer.textContent = 'Rolevance · Free plan';
+    footer.innerHTML = `<strong>Rolevance</strong> <span class="js-panel-footer-tier">· ${isTrial ? 'Trial' : 'Free plan'}</span>`;
     panel.appendChild(footer);
 
     return panel;
@@ -375,13 +340,15 @@
     const panel = document.createElement('div');
     panel.className = `js-panel js-panel--${label}`;
 
-    // ── Verdict card — light, readable, structured layout ───────────────────
-    // Layout: [verdict text (flex:1)] [right column: chip / save+close]
-    // No absolute positioning — everything in normal flow so nothing overlaps.
+    // Store score as data attribute for ai-analyzer.js to read
+    // (replaces the .js-verdict-chip-num that was in the old chip)
+    if (hasScore) panel.dataset.jsScore = String(score);
+
+    // ── Verdict card ────────────────────────────────────────────────────────
     const verdictCard = document.createElement('div');
     verdictCard.className = `js-verdict-card js-verdict-card--${label}`;
 
-    // Verdict text — score-only, no specific skill claims (AI updates later)
+    // Verdict text — brief, direct
     let decisionText;
     if (!hasScore)        decisionText = 'Complete your profile to score';
     else if (score >= 80) decisionText = 'Apply with confidence';
@@ -390,67 +357,79 @@
     else if (score >= 40) decisionText = 'Stretch role — if compelling';
     else                  decisionText = 'Likely not a match';
 
+    // Match label text from scorer
+    const mTxt = result.text || '';
+
+    // Left: verdict text + score pill stacked
+    const vcDecision = document.createElement('div');
+    vcDecision.className = 'js-verdict-decision';
+
     const vcText = document.createElement('div');
     vcText.className = `js-verdict-text js-verdict-text--${label}`;
     vcText.dataset.jsDecisionLead = '1';
     vcText.textContent = decisionText;
 
-    // Right column: score chip above, buttons below — stacked, no overlap
-    const vcRight = document.createElement('div');
-    vcRight.className = 'js-verdict-right';
+    // Score pill — "Exceptional match · 87/100"
+    if (hasScore || mTxt) {
+      const vcPill = document.createElement('div');
+      vcPill.className = `js-verdict-pill js-verdict-pill--${label}`;
+      const dot = document.createElement('span');
+      dot.className = 'js-verdict-pill-dot';
+      vcPill.appendChild(dot);
+      const pillText = [mTxt, hasScore ? `${score}/100` : ''].filter(Boolean).join(' · ');
+      vcPill.appendChild(document.createTextNode(pillText));
+      vcDecision.append(vcText, vcPill);
+    } else {
+      vcDecision.appendChild(vcText);
+    }
 
-    // Score chip with /100 context
-    const vcChip = document.createElement('div');
-    vcChip.className = `js-verdict-chip js-verdict-chip--${label}`;
-    vcChip.innerHTML =
-      `<span class="js-verdict-chip-num">${hasScore ? score : '—'}</span>` +
-      (hasScore ? `<span class="js-verdict-chip-sub">/100</span>` : '');
+    // Right: close button on top, save button below
+    const vcActions = document.createElement('div');
+    vcActions.className = 'js-verdict-actions';
+    vcActions.append(makeCloseBtn(), makeSaveBtn(jobData, result));
 
-    // Save + close as a button row
-    const vcBtns = document.createElement('div');
-    vcBtns.className = 'js-verdict-btns';
-    vcBtns.append(makeSaveBtn(jobData, result), makeCloseBtn());
-
-    vcRight.append(vcChip, vcBtns);
-
-    // Main row: text + right column
+    // Main row
     const vcMain = document.createElement('div');
     vcMain.className = 'js-verdict-main';
-    vcMain.append(vcText, vcRight);
+    vcMain.append(vcDecision, vcActions);
     verdictCard.appendChild(vcMain);
 
-    // Meta row: job title · company · match label
+    // Meta row: company · title · location
     const vcMeta = document.createElement('div');
     vcMeta.className = 'js-verdict-meta';
-    const ctxParts = [jobData.title, jobData.company].filter(Boolean);
-    const mTxt     = result.text || '';
-    vcMeta.innerHTML =
-      (ctxParts.length ? `<span class="js-verdict-job">${ctxParts.join(' · ')}</span>` : '') +
-      (ctxParts.length && mTxt ? `<span class="js-verdict-sep"> · </span>` : '') +
-      (mTxt ? `<span class="js-verdict-lbl">${mTxt}</span>` : '');
+    const metaParts = [jobData.company, jobData.title, jobData.location].filter(Boolean);
+    vcMeta.innerHTML = metaParts.map(p => `<span>${p}</span>`).join('<span class="js-verdict-sep">·</span>');
     verdictCard.appendChild(vcMeta);
 
     panel.appendChild(verdictCard);
 
-    // 2. Quick-facts bar (moved up — first body element)
+    // ── Quick-facts bar ──────────────────────────────────────────────────────
     const qf = buildQuickFacts(jobData, result);
     if (qf) panel.appendChild(qf);
 
-    // 5. AI section placeholder (ai-analyzer fills this async)
+    // ── AI section placeholder ───────────────────────────────────────────────
+    // Shows shimmer immediately. ai-analyzer.js replaces this with real content.
     const aiSection = document.createElement('div');
     aiSection.className = 'js-ai-section';
-    aiSection.innerHTML = `<div class="js-ai-hdr">
-      <span class="js-ai-badge">AI</span>
-      <span class="js-ai-title">Deep analysis</span>
-      <span class="js-ai-loading">Will load when you open the full job…</span>
-    </div>`;
+    aiSection.innerHTML = `
+      <div class="js-ai-hdr">
+        <span class="js-ai-badge">AI coaching</span>
+        <span class="js-ai-model">Loading analysis…</span>
+      </div>
+      <div class="js-shimmer">
+        <div class="js-shimmer-ln js-shimmer-ln--lg"></div>
+        <div class="js-shimmer-ln js-shimmer-ln--md"></div>
+        <div class="js-shimmer-ln js-shimmer-ln--xs" style="margin-top:4px"></div>
+        <div class="js-shimmer-ln js-shimmer-ln--sm"></div>
+        <div class="js-shimmer-ln js-shimmer-ln--md"></div>
+      </div>`;
     panel.appendChild(aiSection);
 
-    // 4. Criteria — collapsible, collapsed by default
+    // ── Criteria breakdown — collapsible ─────────────────────────────────────
     if (result.criteria?.length) {
-      const weighted  = result.criteria.filter(c => c.weight > 0);
-      const metCount  = weighted.filter(c => c.status === 'pass').length;
-      const total     = weighted.length;
+      const weighted = result.criteria.filter(c => c.weight > 0);
+      const metCount = weighted.filter(c => c.status === 'pass').length;
+      const total    = weighted.length;
 
       const section = document.createElement('div');
       section.className = 'js-criteria';
@@ -480,9 +459,7 @@
       panel.appendChild(section);
     }
 
-    // (Rule-based tips suppressed from panel body — AI analysis provides richer tips)
-
-    // 8. Footer
+    // ── Footer ───────────────────────────────────────────────────────────────
     const footer = document.createElement('div');
     footer.className = 'js-panel-footer';
     footer.innerHTML = _buildFooterHTML(panelCheckResult);
@@ -492,7 +469,6 @@
   }
 
   // ── Show / hide ────────────────────────────────────────────────────────────
-  // anchor: any DOM element — li on search page, #js-detail-panel-root on detail page.
   function showPanel(anchor, result, jobData, panelCheckResult) {
     hidePanel();
     const panel = result.limitReached
@@ -516,17 +492,13 @@
   }
 
   // ── Toggle — check-first flow ──────────────────────────────────────────────
-  // badge:  the clicked element (js-badge on search page, .js-db-analysis-btn on detail)
-  // anchor: where to append the panel (li on search, #js-detail-panel-root on detail)
   async function togglePanel(badge, anchor, result, jobData) {
-    // Same badge clicked again → close the panel
     if (_panel && _badge === badge) { hidePanel(); return; }
     if (_checking) return;
     _checking = true;
 
     if (_badge) _badge.classList.remove('js-badge--active');
 
-    // Show a loading indicator in the trigger element while the gate checks
     const scoreEl       = badge.querySelector?.('.js-badge-score') ?? null;
     const originalScore = scoreEl ? scoreEl.textContent : null;
     if (scoreEl) scoreEl.textContent = '…';
@@ -556,10 +528,12 @@
     if (!panelCheckResult.allowed) {
       showPanel(anchor, {
         ...result,
-        limitReached: true,
-        resetAt:   panelCheckResult.resetAt  || null,
-        usedToday: panelCheckResult.usedToday || 0,
-        limit:     panelCheckResult.limit    || 5,
+        limitReached:  true,
+        resetAt:       panelCheckResult.resetAt       || null,
+        usedToday:     panelCheckResult.usedToday      || 0,
+        limit:         panelCheckResult.limit          || 3,
+        trial:         panelCheckResult.trial          || false,
+        trialDaysLeft: panelCheckResult.trialDaysLeft  || null,
       }, jobData, panelCheckResult);
       return;
     }

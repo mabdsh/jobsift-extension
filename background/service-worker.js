@@ -126,12 +126,16 @@ async function fetchAndCacheSubStatus() {
   const deviceId = await getDeviceId();
   if (!deviceId) return;
   try {
-    const res = await fetch(`${API_BASE_URL}/api/subscription/status`, {
-      headers: {
-        'X-Device-ID':     deviceId,
-        'X-Client-Secret': CLIENT_SECRET,
+    const res = await fetchWithTimeout(
+      `${API_BASE_URL}/api/subscription/status`,
+      {
+        headers: {
+          'X-Device-ID':     deviceId,
+          'X-Client-Secret': CLIENT_SECRET,
+        },
       },
-    });
+      BACKEND_TIMEOUT_MS
+    );
     if (!res.ok) return;
     const data = await res.json();
     await chrome.storage.local.set({
@@ -204,6 +208,49 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         sendResponse(data);
       } catch (_) {
         sendResponse({ allowed: true }); // fail open
+      }
+    });
+    return true;
+  }
+
+  // ── Trial activation ──────────────────────────────────────────────────────
+  if (msg.type === 'JS_TRIAL_ACTIVATE') {
+    const email = (msg.email || '').trim().toLowerCase();
+    if (!email || !email.includes('@')) {
+      sendResponse({ ok: false, message: 'Invalid email address.' });
+      return;
+    }
+    getDeviceId().then(async deviceId => {
+      if (!deviceId) { sendResponse({ ok: false, message: 'Device ID not found.' }); return; }
+      try {
+        const res = await fetchWithTimeout(
+          `${API_BASE_URL}/api/trial/activate`,
+          {
+            method:  'POST',
+            headers: {
+              'Content-Type':    'application/json',
+              'X-Device-ID':     deviceId,
+              'X-Client-Secret': CLIENT_SECRET,
+            },
+            body: JSON.stringify({ email }),
+          },
+          BACKEND_TIMEOUT_MS
+        );
+        const data = await res.json();
+        if (!res.ok) { sendResponse({ ok: false, message: data.message || 'Activation failed.' }); return; }
+        // Store email alongside the profile in local storage
+        const existing = await new Promise(r =>
+          chrome.storage.local.get('rolevance', d => r(d.rolevance || {}))
+        );
+        await chrome.storage.local.set({ rolevance: { ...existing, email } });
+        // Refresh subscription status so popup gets the new trial tier immediately
+        await fetchAndCacheSubStatus();
+        const cached = await new Promise(r =>
+          chrome.storage.local.get('rolevance_sub', d => r(d.rolevance_sub || null))
+        );
+        sendResponse({ ok: true, status: cached });
+      } catch (_) {
+        sendResponse({ ok: false, message: 'Network error — try again shortly.' });
       }
     });
     return true;

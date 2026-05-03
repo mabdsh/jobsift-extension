@@ -1,9 +1,7 @@
-// Rolevance AI Analyzer v5.2
-// v5.2: Visual differentiation per section, stagger reveal animation, pull-quote insight
-// v3.1.0: getFullDescription() updated to use data-testid="expandable-text-box" —
-//         the previous class-based selectors are dead on LinkedIn's new obfuscated DOM.
-//         Renders deep analysis inside the panel: decision → summary →
-//         key requirements → strengths → gaps → tips → insights
+// Rolevance AI Analyzer v5.3
+// v5.3: Fixed prices ($7), fixed trial analysis count (10), updated AI header labels,
+//       circular lock icons replace emoji, data-js-score attribute for score reading,
+//       "AI coaching" badge throughout, coaching insight shows without header chrome.
 
 (function () {
   'use strict';
@@ -13,10 +11,6 @@
   const _deepCache = new Map();
 
   // ── Job description selectors ──────────────────────────────────────────────
-  // Priority order:
-  //   1. data-testid="expandable-text-box" — stable across LinkedIn DOM refactors (PRIMARY)
-  //   2. #jobDescriptionText — stable Indeed ID (PRIMARY for Indeed)
-  //   3. Legacy LinkedIn class selectors — fallbacks for older layouts
   const JD_SELECTORS = [
     '[data-testid="expandable-text-box"]',
     '#jobDescriptionText',
@@ -37,12 +31,7 @@
     return null;
   }
 
-  // analyzeJobDeep — called from content.js after panel opens.
-  // panelCheckResult carries the tier so we know whether to show the AI
-  // analysis or the upgrade wall without making any API call.
   async function analyzeJobDeep(jobData, panelEl, li, prefs, panelCheckResult, result) {
-    // Free tier: AI is completely locked — show upgrade teaser, no API call made.
-    // Detection: trial===false AND limit is a finite number (Pro/Trial have limit:null).
     const pcr    = panelCheckResult || {};
     const isFree = !pcr.trial && pcr.limit !== null && pcr.limit !== undefined;
     if (isFree) { renderUpgradeTeaser(panelEl, result); return; }
@@ -81,10 +70,9 @@
   function renderLoading(panel) {
     const sec = getOrCreate(panel);
     sec.innerHTML = `
-      <div class="js-ai-hdr">
-        <span class="js-ai-badge">AI</span>
-        <span class="js-ai-title">Deep analysis</span>
-        <span class="js-ai-loading">Reading full job description…</span>
+      <div class="js-ai-hdr js-ai-stagger js-ai-stagger-1">
+        <span class="js-ai-badge">AI coaching</span>
+        <span class="js-ai-model">Analysing full job description…</span>
       </div>
       <div class="js-shimmer">
         <div class="js-shimmer-ln js-shimmer-ln--lg"></div>
@@ -95,13 +83,10 @@
       </div>`;
   }
 
-  // Upgrade wall — shown to free users instead of calling the AI API.
-  // Shows exactly what's locked so users know what they're missing.
-
+  // Upgrade teaser — shown to free users. Lock icon uses CSS class, not emoji.
   function renderUpgradeTeaser(panel, result) {
     const sec   = getOrCreate(panel);
     const score = result?.score;
-    const label = result?.label || 'gray';
 
     let msg;
     if (score >= 70) {
@@ -112,78 +97,82 @@
       msg = "Unlock your coaching analysis to see the full picture — what this role actually needs, where you stand, and whether it's worth your time.";
     }
 
+    // Lock icon: CSS circle, not emoji (consistent rendering)
+    const lockIcon = `<span class="js-ai-upgrade-lock">
+      <svg viewBox="0 0 10 10" fill="none" width="9" height="9">
+        <rect x="2" y="4.5" width="6" height="5" rx="1" stroke="currentColor" stroke-width="1.1"/>
+        <path d="M3.5 4.5V3a1.5 1.5 0 013 0v1.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+      </svg>
+    </span>`;
+
     sec.innerHTML = `
-      <div class="js-ai-hdr">
-        <span class="js-ai-badge">AI</span>
-        <span class="js-ai-title">Deep analysis</span>
+      <div class="js-ai-hdr js-ai-stagger js-ai-stagger-1">
+        <span class="js-ai-badge">AI coaching</span>
       </div>
       <div class="js-ai-upgrade">
         <p class="js-ai-upgrade-msg">${_esc(msg)}</p>
         <div class="js-ai-upgrade-features">
           <div class="js-ai-upgrade-feat">
-            <span class="js-ai-upgrade-lock">🔒</span>
+            ${lockIcon}
             <div>
               <span class="js-ai-upgrade-feat-name">Why you're a strong candidate</span>
               <span class="js-ai-upgrade-feat-hint"> — 2–3 specific reasons for this role</span>
             </div>
           </div>
           <div class="js-ai-upgrade-feat">
-            <span class="js-ai-upgrade-lock">🔒</span>
+            ${lockIcon}
             <div>
               <span class="js-ai-upgrade-feat-name">Close the gap</span>
               <span class="js-ai-upgrade-feat-hint"> — actionable steps for each gap</span>
             </div>
           </div>
           <div class="js-ai-upgrade-feat">
-            <span class="js-ai-upgrade-lock">🔒</span>
+            ${lockIcon}
             <div>
               <span class="js-ai-upgrade-feat-name">Your application game plan</span>
               <span class="js-ai-upgrade-feat-hint"> — cover letter angle, CV tip, interview prep</span>
             </div>
           </div>
           <div class="js-ai-upgrade-feat">
-            <span class="js-ai-upgrade-lock">🔒</span>
+            ${lockIcon}
             <div>
               <span class="js-ai-upgrade-feat-name">Coach's take</span>
               <span class="js-ai-upgrade-feat-hint"> — the non-obvious observation about this role</span>
             </div>
           </div>
         </div>
-        <button class="js-ai-upgrade-btn"
-          onclick="chrome.runtime.sendMessage({type:'JS_OPEN_UPGRADE'})">
-          Unlock full analysis — $9/month
+        <button class="js-ai-upgrade-btn">
+          Unlock full coaching — $7/month
           <svg viewBox="0 0 16 16" fill="none" width="13" height="13">
             <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.8"
                   stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </button>
-        <div class="js-ai-upgrade-sub">5-day free trial · Cancel anytime</div>
+        <div class="js-ai-upgrade-sub">Start 7-day free trial · Cancel anytime</div>
       </div>`;
+
+    sec.querySelector('.js-ai-upgrade-btn')
+      ?.addEventListener('click', () => chrome.runtime.sendMessage({ type: 'JS_OPEN_UPGRADE' }));
   }
 
   function renderDeepResult(panel, r) {
     const sec = getOrCreate(panel);
-
-    // Stagger index — each section reveals 80ms after the previous
     let si = 0;
     const s = () => `js-ai-stagger js-ai-stagger-${++si}`;
 
     let html = `<div class="js-ai-hdr ${s()}">
-      <span class="js-ai-badge">AI</span>
-      <span class="js-ai-title">Deep analysis</span>
+      <span class="js-ai-badge">AI coaching</span>
+      <span class="js-ai-model">Full description analysed</span>
     </div>`;
 
-    // Decision — full-width verdict in the AI section header area
     if (r.decision) {
       html += `<div class="js-ai-decision ${s()}">${_esc(r.decision)}</div>`;
     }
 
-    // Summary — editorial prose, no label
     if (r.summary) {
       html += `<div class="js-ai-summary ${s()}">${_esc(r.summary)}</div>`;
     }
 
-    // Key requirements — neutral chips (what the job needs)
     if (r.keyRequirements?.length) {
       html += `<div class="js-ai-section-block js-ai-block--req ${s()}">
         <div class="js-ai-block-ttl">What this role needs</div>
@@ -194,25 +183,22 @@
       html += `</div></div>`;
     }
 
-    // Strengths — emerald-tinted rows with checkmark
     if (r.strengths?.length) {
       html += `<div class="js-ai-section-block js-ai-block--strength ${s()}">
-        <div class="js-ai-block-ttl">Why you're a strong candidate</div>`;
+        <div class="js-ai-block-ttl">Strengths</div>`;
       r.strengths.forEach(str => {
         html += `<div class="js-ai-match-row">
-          <span class="js-ai-match-icon">✓</span>
+          <span class="js-ai-match-icon">&#10003;</span>
           <span>${_esc(str)}</span>
         </div>`;
       });
       html += `</div>`;
     }
 
-    // Gaps — amber-tinted rows with action arrow
     if (r.gaps?.length) {
       html += `<div class="js-ai-section-block js-ai-block--gap ${s()}">
-        <div class="js-ai-block-ttl">Close the gap</div>`;
+        <div class="js-ai-block-ttl">Gaps</div>`;
       r.gaps.forEach(g => {
-        // Split "Gap description — specific action to take" format
         const sepIdx = g.indexOf(' — ');
         if (sepIdx !== -1) {
           const gapPart    = g.slice(0, sepIdx);
@@ -221,7 +207,7 @@
             <span class="js-ai-gap-icon">!</span>
             <div class="js-ai-gap-body">
               <div class="js-ai-gap-issue">${_esc(gapPart)}</div>
-              <div class="js-ai-gap-action"><span class="js-ai-gap-action-arrow">→</span> ${_esc(actionPart)}</div>
+              <div class="js-ai-gap-action"><span class="js-ai-gap-action-arrow">&#8594;</span> ${_esc(actionPart)}</div>
             </div>
           </div>`;
         } else {
@@ -234,7 +220,6 @@
       html += `</div>`;
     }
 
-    // Tips — numbered, editorial
     if (r.tips?.length) {
       html += `<div class="js-ai-section-block js-ai-block--tip ${s()}">
         <div class="js-ai-block-ttl">Your application game plan</div>`;
@@ -247,83 +232,86 @@
       html += `</div>`;
     }
 
-    // Insight — pull-quote with accent border
+    // Insight — simplified in CSS (left border + plain text, no gradient or icon chrome)
     if (r.insights) {
       html += `<div class="js-ai-insight ${s()}">
-        <div class="js-ai-insight-hdr">
-          <span class="js-ai-insight-icon">💡</span>
-          <span class="js-ai-insight-lbl">Coach's take</span>
-        </div>
+        <div class="js-ai-insight-lbl">Coach's take</div>
         <div class="js-ai-insight-body">${_esc(r.insights)}</div>
       </div>`;
     }
 
     sec.innerHTML = html;
-
-    // Update the panel header decision text now that we have the full picture.
-    // The initial header was based on card data only (limited snippet).
-    // The AI has read the complete job description — its verdict is authoritative.
-    // We update the header quietly so the user sees one consistent message.
     _updateHeaderDecision(panel, r);
   }
 
+  // Reads score from panel's data attribute (set by panel.js createPanel).
+  // Replaces the old .js-verdict-chip-num querySelector approach.
   function _updateHeaderDecision(panel, r) {
     const lead = panel.querySelector('[data-js-decision-lead]');
     if (!lead) return;
 
-    // Read the score directly from the verdict chip that was rendered at panel-open time.
-    // This is the rule-based score — the only number we can trust as a hard gate.
-    // The AI can refine the verdict WITHIN a score range but must NEVER promote
-    // a poor match to a positive verdict, regardless of what it finds in gaps/strengths.
-    const chipEl = panel.querySelector('.js-verdict-chip-num');
-    const score  = chipEl ? parseInt(chipEl.textContent, 10) : null;
+    const scoreStr = panel.dataset.jsScore;
+    const score    = scoreStr ? parseInt(scoreStr, 10) : null;
 
-    // Hard gate: below 50 the rule-based verdict is already correct.
-    // The AI body sections still show all gaps and strengths — users get the full picture.
-    // We just don't let a "2 strengths, 1 gap" count override a 25/100 score.
+    // Hard gate: rule-based verdict is correct below 50
     if (score !== null && score < 50) return;
 
     const gapCount      = r.gaps?.length      || 0;
     const strengthCount = r.strengths?.length  || 0;
 
-    // Derive AI verdict capped by score range so the header never contradicts the number.
     let verdict;
     if (score >= 80) {
-      // High score: let AI distinguish confident vs qualified apply
-      if (gapCount === 0) verdict = 'Apply with confidence — strong match';
-      else                verdict = 'Apply — review one gap below';
+      verdict = gapCount === 0 ? 'Apply with confidence — strong match' : 'Apply — review one gap below';
     } else if (score >= 70) {
-      // Good score: positive but measured
-      if (gapCount === 0 && strengthCount > 0) verdict = 'Strong match — worth applying';
-      else                                     verdict = 'Worth applying — review gaps below';
+      verdict = (gapCount === 0 && strengthCount > 0) ? 'Strong match — worth applying' : 'Worth applying — review gaps below';
     } else if (score >= 55) {
-      // Moderate score: always qualified, not enthusiastic
-      if (gapCount <= 1) verdict = 'Worth applying — one gap to address';
-      else               verdict = 'Review carefully before applying';
+      verdict = gapCount <= 1 ? 'Worth applying — one gap to address' : 'Review carefully before applying';
     } else {
-      // 50–54: stretch territory — don't upgrade, let the initial verdict stand
       return;
     }
 
-    // Smooth swap — 250ms fade so it doesn't feel like a flash
     lead.style.transition = 'opacity 0.25s';
     lead.style.opacity    = '0';
-    setTimeout(() => {
-      lead.textContent  = verdict;
-      lead.style.opacity = '1';
-    }, 250);
+    setTimeout(() => { lead.textContent = verdict; lead.style.opacity = '1'; }, 250);
   }
 
   function renderError(panel, msg) {
-    const sec  = getOrCreate(panel);
+    const sec = getOrCreate(panel);
+
+    if (msg?.includes('trial_daily_limit')) {
+      // Fix: 10 analyses (not 5), $7 (not $9)
+      sec.innerHTML = `
+        <div class="js-ai-hdr">
+          <span class="js-ai-badge">AI coaching</span>
+        </div>
+        <div class="js-ai-limit">
+          <div class="js-ai-limit-icon">
+            <svg viewBox="0 0 24 24" fill="none" width="20" height="20">
+              <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.8"/>
+              <line x1="12" y1="7" x2="12" y2="13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <circle cx="12" cy="16.5" r="1" fill="currentColor"/>
+            </svg>
+          </div>
+          <div class="js-ai-limit-title">Daily trial limit reached</div>
+          <div class="js-ai-limit-sub">
+            You've used today's 10 trial analyses. Resets at midnight UTC — or upgrade for unlimited.
+          </div>
+          <button class="js-ai-upgrade-btn js-ai-trial-up-btn" type="button" style="margin-top:10px">
+            Upgrade for unlimited — $7/month
+          </button>
+        </div>`;
+      sec.querySelector('.js-ai-trial-up-btn')
+        ?.addEventListener('click', () => chrome.runtime.sendMessage({ type: 'JS_OPEN_UPGRADE' }));
+      return;
+    }
+
     const rate = msg?.toLowerCase().includes('rate_limit') || msg?.includes('RATE_LIMIT')
               || msg?.toLowerCase().includes('groq_parse');
 
     if (rate) {
       sec.innerHTML = `
         <div class="js-ai-hdr">
-          <span class="js-ai-badge">AI</span>
-          <span class="js-ai-title">Deep analysis</span>
+          <span class="js-ai-badge">AI coaching</span>
         </div>
         <div class="js-ai-limit">
           <div class="js-ai-limit-icon">
@@ -339,22 +327,18 @@
     } else {
       sec.innerHTML = `
         <div class="js-ai-hdr">
-          <span class="js-ai-badge">AI</span>
-          <span class="js-ai-title">Deep analysis</span>
+          <span class="js-ai-badge">AI coaching</span>
         </div>
         <div class="js-ai-prompt js-ai-prompt--muted">Analysis temporarily unavailable — badge scores are unaffected.</div>`;
     }
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
-
   function _esc(str) {
     if (!str) return '';
     return String(str)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
   function getOrCreate(panel) {
