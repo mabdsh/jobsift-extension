@@ -2,6 +2,18 @@
 // Complete redesign: inline trial activation, usage bars dashboard, no separate trial screen.
 'use strict';
 
+// ── Pricing — single source of truth ──────────────────────────────────────────
+// Update these when pricing changes. Never hardcode prices elsewhere.
+const PRICE = {
+  monthly: { amount: 9,  display: '$9',   period: '/mo',  label: 'Monthly', detail: 'Billed monthly' },
+  annual:  { amount: 90, display: '$90',  period: '/yr',  label: 'Annual',  detail: '2 months free',
+             perMonth: '$7.50', saving: 'Save $18' },
+};
+
+// Currently selected plan in upgrade UI — 'monthly' | 'annual'
+// Persists across dashboard re-renders within the session.
+let _selectedPlan = 'annual'; // default to annual (better LTV, usually pre-selected in SaaS)
+
 const MAX_CRITICAL = 4;
 const tags = { roles:[], critical:[], primary:[], secondary:[], deal:[], avoid:[] };
 
@@ -289,9 +301,42 @@ function renderDashboard(status) {
   // Wire up edit button
   document.getElementById('dashEditBtn')?.addEventListener('click', hideDashboard);
 
-  // Wire up upgrade buttons
+  // ── Plan toggle interaction ────────────────────────────────────────────────
+  db.querySelector('#dashPlanToggle')?.addEventListener('click', e => {
+    const btn = e.target.closest('[data-plan]');
+    if (!btn) return;
+    const plan = btn.dataset.plan;
+    if (plan === _selectedPlan) return;
+    _selectedPlan = plan;
+
+    // Update active button style
+    db.querySelectorAll('.dash-plan-btn').forEach(b => {
+      b.classList.toggle('dash-plan-btn--active', b.dataset.plan === plan);
+    });
+
+    // Update billing detail line under the toggle
+    const detail = db.querySelector('#dashPlanDetail');
+    if (detail) {
+      detail.innerHTML = plan === 'annual'
+        ? `<span class="dash-plan-billed">Billed ${PRICE.annual.display}/year · ${PRICE.annual.saving}</span>`
+        : `<span class="dash-plan-billed">${PRICE.monthly.detail}</span>`;
+    }
+
+    // Update the CTA button text to reflect selected plan price
+    const cta = db.querySelector('#dashUpgradeCta');
+    if (cta) {
+      const isTrial    = tier === 'trial';
+      const trialUsed  = !!status?.trial_activated;
+      const ctxContext = isTrial ? 'trial' : (!trialUsed ? 'subscribe' : 'default');
+      cta.textContent  = _upgradeCTAText(plan, ctxContext);
+    }
+  });
+
+  // ── Upgrade buttons — pass selected plan to service worker ────────────────
   db.querySelectorAll('[data-action="upgrade"]').forEach(btn =>
-    btn.addEventListener('click', () => chrome.runtime.sendMessage({ type: 'JS_OPEN_UPGRADE' }))
+    btn.addEventListener('click', () =>
+      chrome.runtime.sendMessage({ type: 'JS_OPEN_UPGRADE', plan: _selectedPlan })
+    )
   );
 
   // ── Wire up dashboard trial activation form (free users who skipped onboarding) ──
@@ -453,43 +498,88 @@ function _buildUsageCard(panelUsed, panelLim, anlUsed, anlLim) {
     </div>`;
 }
 
+// ── CTA text helper — always reflects the selected plan price ─────────────────
+// Used by _buildUpgradeCard (initial render) and the toggle handler (on switch).
+function _upgradeCTAText(plan, context) {
+  const p = PRICE[plan];
+  const price = plan === 'annual'
+    ? `${p.display}/year`
+    : `${p.display}${p.period}`;
+  if (context === 'trial') return `Keep Pro — ${price} →`;
+  if (context === 'subscribe') return `Subscribe to Pro — ${price} →`;
+  return `Upgrade to Pro — ${price} →`;
+}
+
+// ── Plan toggle HTML helper ───────────────────────────────────────────────────
+// Renders the monthly/annual toggle used in upgrade cards.
+// selected = 'monthly' | 'annual'
+function _buildPlanToggle(selected) {
+  const mo = PRICE.monthly;
+  const yr = PRICE.annual;
+  return `
+    <div class="dash-plan-toggle" id="dashPlanToggle">
+      <button class="dash-plan-btn ${selected === 'monthly' ? 'dash-plan-btn--active' : ''}"
+              data-plan="monthly" type="button">
+        <span class="dash-plan-label">${mo.label}</span>
+        <span class="dash-plan-price">${mo.display}<span class="dash-plan-period">${mo.period}</span></span>
+      </button>
+      <button class="dash-plan-btn ${selected === 'annual' ? 'dash-plan-btn--active' : ''}"
+              data-plan="annual" type="button">
+        <span class="dash-plan-label">${yr.label}</span>
+        <span class="dash-plan-price">${yr.perMonth}<span class="dash-plan-period">/mo</span></span>
+        <span class="dash-plan-badge">2 months free</span>
+      </button>
+    </div>
+    <div class="dash-plan-detail" id="dashPlanDetail">
+      ${selected === 'annual'
+        ? `<span class="dash-plan-billed">Billed ${yr.display}/year · ${yr.saving}</span>`
+        : `<span class="dash-plan-billed">${mo.detail}</span>`}
+    </div>`;
+}
+
 function _buildUpgradeCard(tier, status) {
   const isTrial   = tier === 'trial';
   const trialUsed = !!status?.trial_activated;
   const days      = status?.trial_days_left ?? 7;
 
+  const feats = [
+    'Unlimited panels &amp; AI analyses per day',
+    'Strengths, gaps &amp; interview coaching',
+    'Cover letter angles per role',
+    'Cancel anytime',
+  ];
+  const featHTML = feats.map(f =>
+    `<div class="dash-upgrade-feat"><div class="dash-upgrade-check">✓</div>${f}</div>`
+  ).join('');
+
   // ── Trial tier — keep your access ────────────────────────────────────────
   if (isTrial) {
-    const feats = [
-      'Unlimited panels & AI analyses — forever',
-      'Everything from your trial, unlimited',
-      'Cancel anytime, no questions asked',
-    ];
+    const urgency = days <= 2
+      ? `<span class="dash-trial-urgency">⚠ ${days === 1 ? 'Last day' : '2 days left'} — don't lose access</span>`
+      : '';
     return `
       <div class="dash-upgrade-card">
-        <div class="dash-upgrade-top">
-          <div>
-            <div class="dash-upgrade-name">Keep your access</div>
-            <div class="dash-upgrade-desc">Trial ends in ${days} day${days !== 1 ? 's' : ''} — upgrade to stay on Pro</div>
-          </div>
-          <div class="dash-upgrade-price"><span class="dash-upgrade-num">$7</span><span class="dash-upgrade-mo">/mo</span></div>
+        <div class="dash-upgrade-name-row">
+          <div class="dash-upgrade-name">Keep your access</div>
+          ${urgency}
         </div>
-        <button class="dash-upgrade-cta dash-upgrade-cta--amber" data-action="upgrade" type="button">Upgrade before trial ends →</button>
-        <div class="dash-upgrade-feats">${feats.map(f=>`<div class="dash-upgrade-feat"><div class="dash-upgrade-check">✓</div>${f}</div>`).join('')}</div>
+        <div class="dash-upgrade-desc">Trial ends in ${days} day${days !== 1 ? 's' : ''} — choose your plan to stay on Pro</div>
+        ${_buildPlanToggle(_selectedPlan)}
+        <button class="dash-upgrade-cta dash-upgrade-cta--amber" id="dashUpgradeCta" data-action="upgrade" type="button">
+          ${_upgradeCTAText(_selectedPlan, 'trial')}
+        </button>
+        <div class="dash-upgrade-feats">${featHTML}</div>
       </div>`;
   }
 
-  // ── Free tier — trial not yet used: show trial as primary ────────────────
+  // ── Free tier — trial not yet used: trial as primary, paid as secondary ──
   if (!trialUsed) {
     return `
       <div class="dash-upgrade-card">
-        <div class="dash-upgrade-top">
-          <div>
-            <div class="dash-upgrade-name">Try Pro free for 7 days</div>
-            <div class="dash-upgrade-desc">Unlimited panels, analyses &amp; AI coaching</div>
-          </div>
-          <div class="dash-upgrade-price"><span class="dash-upgrade-num" style="font-size:18px">Free</span></div>
+        <div class="dash-upgrade-name-row">
+          <div class="dash-upgrade-name">Try Pro free for 7 days</div>
         </div>
+        <div class="dash-upgrade-desc">Unlimited panels, analyses &amp; AI coaching</div>
         <div class="dash-trial-email-form">
           <div class="dash-trial-email-row">
             <input type="email" id="dashTrialEmail" class="dash-trial-email-inp"
@@ -501,8 +591,13 @@ function _buildUpgradeCard(tier, status) {
         <div class="dash-upgrade-feats">
           <div class="dash-upgrade-feat"><div class="dash-upgrade-check">✓</div>10 panels &amp; AI analyses per day</div>
           <div class="dash-upgrade-feat"><div class="dash-upgrade-check">✓</div>Full coaching: strengths, gaps &amp; game plan</div>
-          <div class="dash-upgrade-feat"><div class="dash-upgrade-check">✓</div>No credit card needed</div>
+          <div class="dash-upgrade-feat"><div class="dash-upgrade-check">✓</div>No credit card needed · 7 days free</div>
         </div>
+        <div class="dash-or-row"><span>ready to subscribe?</span></div>
+        ${_buildPlanToggle(_selectedPlan)}
+        <button class="dash-upgrade-cta dash-upgrade-cta--secondary" id="dashUpgradeCta" data-action="upgrade" type="button">
+          ${_upgradeCTAText(_selectedPlan, 'subscribe')}
+        </button>
         <div class="dash-or-row"><span>already on Pro?</span></div>
         <button class="dash-restore-link" data-action="restore-toggle" type="button">Restore subscription by email</button>
         <div id="dashRestoreForm" style="display:none" class="dash-restore-form">
@@ -512,30 +607,19 @@ function _buildUpgradeCard(tier, status) {
           </div>
           <div id="dashRestoreMsg" class="msg msg--hidden" role="alert"></div>
         </div>
-        <div class="dash-paid-link-row">
-          <button class="dash-paid-link" data-action="upgrade" type="button">Skip trial — upgrade to Pro for $7/month →</button>
-        </div>
       </div>`;
   }
 
-  // ── Free tier — trial already used: paid upgrade only ────────────────────
-  const feats = [
-    'Unlimited panels & AI analyses per day',
-    'Strengths, gaps & interview coaching',
-    'Cover letter angles per role',
-    'Cancel anytime',
-  ];
+  // ── Free tier — trial already used: paid upgrade with toggle ─────────────
   return `
     <div class="dash-upgrade-card">
-      <div class="dash-upgrade-top">
-        <div>
-          <div class="dash-upgrade-name">Rolevance Pro</div>
-          <div class="dash-upgrade-desc">Unlimited AI coaching on every role</div>
-        </div>
-        <div class="dash-upgrade-price"><span class="dash-upgrade-num">$7</span><span class="dash-upgrade-mo">/mo</span></div>
+      <div class="dash-upgrade-name-row">
+        <div class="dash-upgrade-name">Rolevance Pro</div>
       </div>
-      <button class="dash-upgrade-cta" data-action="upgrade" type="button">Upgrade to Pro →</button>
-      <div class="dash-upgrade-feats">${feats.map(f=>`<div class="dash-upgrade-feat"><div class="dash-upgrade-check">✓</div>${f}</div>`).join('')}</div>
+      <div class="dash-upgrade-desc">Unlimited AI coaching on every role</div>
+      ${_buildPlanToggle(_selectedPlan)}
+      <button class="dash-upgrade-cta" id="dashUpgradeCta" data-action="upgrade" type="button">${_upgradeCTAText(_selectedPlan)}</button>
+      <div class="dash-upgrade-feats">${featHTML}</div>
     </div>
     <button class="dash-restore-link" data-action="restore-toggle" type="button">Already subscribed? Restore access</button>
     <div id="dashRestoreForm" style="display:none" class="dash-restore-form">
@@ -546,7 +630,6 @@ function _buildUpgradeCard(tier, status) {
       <div id="dashRestoreMsg" class="msg msg--hidden" role="alert"></div>
     </div>`;
 }
-
 
 // ── Upgrade complete listener ──────────────────────────────────────────────────
 chrome.runtime.onMessage.addListener((msg) => {
@@ -578,7 +661,7 @@ function updateSubscriptionUI(status) {
 
   function bindUpgradeBtn() {
     document.getElementById('headerUpgradeBtn')?.addEventListener('click', () =>
-      chrome.runtime.sendMessage({ type: 'JS_OPEN_UPGRADE' })
+      chrome.runtime.sendMessage({ type: 'JS_OPEN_UPGRADE', plan: _selectedPlan })
     );
   }
 

@@ -284,8 +284,9 @@
     upgrade.innerHTML = `
       <div class="js-lp-upgrade-hdr">
         <div class="js-lp-upgrade-title">Rolevance Pro</div>
-        <div class="js-lp-upgrade-price">$7<span>/month</span></div>
+        <div class="js-lp-upgrade-price">$7.50<span>/mo</span></div>
       </div>
+      <div class="js-lp-upgrade-billed">Billed $90/year — 2 months free</div>
       <div class="js-lp-features">
         <div class="js-lp-feature">
           <svg viewBox="0 0 16 16" fill="none" width="12" height="12">
@@ -310,17 +311,27 @@
         </div>
       </div>`;
 
-    // Green upgrade button — fixes the blue gradient that was wrong
+    // Annual as primary CTA — best value, leads with $90/year
     const upgradeBtn = document.createElement('button');
     upgradeBtn.className = 'js-lp-upgrade-btn';
     upgradeBtn.textContent = isTrial
-      ? 'Upgrade to Pro — keep unlimited access'
-      : 'Upgrade to Pro — $7/month';
+      ? 'Keep Pro — $90/year (2 months free)'
+      : 'Get Pro — $90/year (2 months free)';
     upgradeBtn.addEventListener('click', e => {
       e.stopPropagation();
-      chrome.runtime.sendMessage({ type: 'JS_OPEN_UPGRADE' });
+      chrome.runtime.sendMessage({ type: 'JS_OPEN_UPGRADE', plan: 'annual' });
     });
     upgrade.appendChild(upgradeBtn);
+
+    // Monthly as a quiet secondary option
+    const monthlyLink = document.createElement('button');
+    monthlyLink.className = 'js-lp-monthly-link';
+    monthlyLink.textContent = 'Or $9/month, billed monthly';
+    monthlyLink.addEventListener('click', e => {
+      e.stopPropagation();
+      chrome.runtime.sendMessage({ type: 'JS_OPEN_UPGRADE', plan: 'monthly' });
+    });
+    upgrade.appendChild(monthlyLink);
     panel.appendChild(upgrade);
 
     const footer = document.createElement('div');

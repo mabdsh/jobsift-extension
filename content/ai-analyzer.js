@@ -1,5 +1,5 @@
 // Rolevance AI Analyzer v5.3
-// v5.3: Fixed prices ($7), fixed trial analysis count (10), updated AI header labels,
+// v5.3: Fixed prices ($9), fixed trial analysis count (10), updated AI header labels,
 //       circular lock icons replace emoji, data-js-score attribute for score reading,
 //       "AI coaching" badge throughout, coaching insight shows without header chrome.
 
@@ -142,17 +142,17 @@
           </div>
         </div>
         <button class="js-ai-upgrade-btn">
-          Unlock full coaching — $7/month
+          Unlock full coaching — $90/year
           <svg viewBox="0 0 16 16" fill="none" width="13" height="13">
             <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.8"
                   stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </button>
-        <div class="js-ai-upgrade-sub">Start 7-day free trial · Cancel anytime</div>
+        <div class="js-ai-upgrade-sub">$7.50/mo · 2 months free · Cancel anytime</div>
       </div>`;
 
     sec.querySelector('.js-ai-upgrade-btn')
-      ?.addEventListener('click', () => chrome.runtime.sendMessage({ type: 'JS_OPEN_UPGRADE' }));
+      ?.addEventListener('click', () => chrome.runtime.sendMessage({ type: 'JS_OPEN_UPGRADE', plan: 'annual' }));
   }
 
   function renderDeepResult(panel, r) {
@@ -279,7 +279,7 @@
     const sec = getOrCreate(panel);
 
     if (msg?.includes('trial_daily_limit')) {
-      // Fix: 10 analyses (not 5), $7 (not $9)
+      // Fix: 10 analyses (not 5), $9 (not old $7)
       sec.innerHTML = `
         <div class="js-ai-hdr">
           <span class="js-ai-badge">AI coaching</span>
@@ -297,11 +297,12 @@
             You've used today's 10 trial analyses. Resets at midnight UTC — or upgrade for unlimited.
           </div>
           <button class="js-ai-upgrade-btn js-ai-trial-up-btn" type="button" style="margin-top:10px">
-            Upgrade for unlimited — $7/month
+            Get Pro — $90/year (2 months free)
           </button>
+          <div class="js-ai-upgrade-sub" style="margin-top:5px">Or $9/month · Cancel anytime</div>
         </div>`;
       sec.querySelector('.js-ai-trial-up-btn')
-        ?.addEventListener('click', () => chrome.runtime.sendMessage({ type: 'JS_OPEN_UPGRADE' }));
+        ?.addEventListener('click', () => chrome.runtime.sendMessage({ type: 'JS_OPEN_UPGRADE', plan: 'annual' }));
       return;
     }
 

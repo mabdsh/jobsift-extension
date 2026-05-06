@@ -500,7 +500,25 @@
   color:#9BB0A5!important; font-family:var(--js-font)!important;
 }
 
-/* Shimmer loading skeleton */
+/* Annual billed detail line inside limit panel */
+.js-lp-upgrade-billed {
+  font-size: 11px!important; color: rgba(5,150,105,.7)!important;
+  font-weight: 600!important; margin-bottom: 10px!important;
+  display: flex!important; align-items: center!important; gap: 5px!important;
+}
+.js-lp-upgrade-billed::before {
+  content: '★'!important; font-size: 9px!important; color: #059669!important;
+}
+
+/* Monthly secondary link below the annual CTA */
+.js-lp-monthly-link {
+  width: 100%!important; background: none!important; border: none!important;
+  font-size: 11px!important; color: #6B8A7B!important;
+  cursor: pointer!important; font-family: var(--js-font)!important;
+  text-align: center!important; padding: 6px 0 0!important;
+  transition: color .12s!important;
+}
+.js-lp-monthly-link:hover { color: #2E4A38!important; }
 .js-shimmer { padding:14px 14px 10px!important; }
 .js-shimmer-ln {
   height:9px!important; border-radius:99px!important;
