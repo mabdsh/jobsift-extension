@@ -1,7 +1,10 @@
-// Rolevance AI Analyzer v5.3
-// v5.3: Fixed prices ($9), fixed trial analysis count (10), updated AI header labels,
-//       circular lock icons replace emoji, data-js-score attribute for score reading,
-//       "AI coaching" badge throughout, coaching insight shows without header chrome.
+// Rolevance AI Analyzer v5.4
+// v5.4: Pricing strings now read from panel-check response (pcr.pricing) — single
+//       source of truth lives in backend config/limits.ts. Trial analyze limit
+//       count derives from pcr.trial_limits.analyze rather than being hardcoded.
+// v5.3: Trial analysis count, AI header labels, circular lock icons replace emoji,
+//       data-js-score attribute for score reading, "AI coaching" badge throughout,
+//       coaching insight shows without header chrome.
 
 (function () {
   'use strict';
@@ -32,9 +35,12 @@
   }
 
   async function analyzeJobDeep(jobData, panelEl, li, prefs, panelCheckResult, result) {
-    const pcr    = panelCheckResult || {};
-    const isFree = !pcr.trial && pcr.limit !== null && pcr.limit !== undefined;
-    if (isFree) { renderUpgradeTeaser(panelEl, result); return; }
+    const pcr = panelCheckResult || {};
+    // NOTE: We deliberately do NOT short-circuit free users to the upgrade
+    // teaser here. Free tier gets 3 AI analyses/day per the limits config;
+    // the backend's rate-limit middleware enforces this and returns a 429
+    // with error:'rate_limit_exceeded' once the cap is hit. renderError
+    // catches that and shows the upgrade teaser. Single source of truth.
 
     const cacheKey = jobData.jobId || jobData.title;
     if (!cacheKey) return;
@@ -61,7 +67,7 @@
       _deepCache.set(cacheKey, res.result);
       renderDeepResult(panelEl, res.result);
     } catch (err) {
-      renderError(panelEl, err.message);
+      renderError(panelEl, err.message, pcr, result);
     }
   }
 
@@ -84,7 +90,11 @@
   }
 
   // Upgrade teaser — shown to free users. Lock icon uses CSS class, not emoji.
-  function renderUpgradeTeaser(panel, result) {
+  // Pricing strings come from the panel-check response (pcr.pricing) — every
+  // open of this teaser reflects the latest config/limits.ts values from the
+  // backend. PR1: pricing consolidation. PR2 will rewrite this teaser to be
+  // trial-first when pcr.trial_available is true.
+  function renderUpgradeTeaser(panel, result, pcr) {
     const sec   = getOrCreate(panel);
     const score = result?.score;
 
@@ -104,6 +114,18 @@
         <path d="M3.5 4.5V3a1.5 1.5 0 013 0v1.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
       </svg>
     </span>`;
+
+    // Pricing — backend-driven via panel-check response.
+    // Falls back to the canonical config/limits.ts values to stay correct
+    // even if the backend serves a stale/older shape.
+    const pr = pcr?.pricing || {
+      monthly_usd: 9, yearly_usd: 84,
+      yearly_savings_label: '2+ months free',
+    };
+    const yearlyPrice     = `$${pr.yearly_usd}`;
+    const monthlyPrice    = `$${pr.monthly_usd}`;
+    const yearlyMonthlyEq = `$${Math.round(pr.yearly_usd / 12)}`;
+    const savingsLabel    = pr.yearly_savings_label || '2+ months free';
 
     sec.innerHTML = `
       <div class="js-ai-hdr js-ai-stagger js-ai-stagger-1">
@@ -142,13 +164,13 @@
           </div>
         </div>
         <button class="js-ai-upgrade-btn">
-          Unlock full coaching — $90/year
+          Unlock full coaching — ${yearlyPrice}/year
           <svg viewBox="0 0 16 16" fill="none" width="13" height="13">
             <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.8"
                   stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </button>
-        <div class="js-ai-upgrade-sub">$7.50/mo · 2 months free · Cancel anytime</div>
+        <div class="js-ai-upgrade-sub">${yearlyMonthlyEq}/mo · ${savingsLabel} · Cancel anytime</div>
       </div>`;
 
     sec.querySelector('.js-ai-upgrade-btn')
@@ -184,11 +206,13 @@
     }
 
     if (r.strengths?.length) {
+      // SVG checkmark — replaces &#10003; for cross-platform consistency.
+      const checkSvg = `<svg viewBox="0 0 12 12" fill="none" width="11" height="11" aria-hidden="true"><path d="M2.5 6.5l2.5 2.5L9.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
       html += `<div class="js-ai-section-block js-ai-block--strength ${s()}">
         <div class="js-ai-block-ttl">Strengths</div>`;
       r.strengths.forEach(str => {
         html += `<div class="js-ai-match-row">
-          <span class="js-ai-match-icon">&#10003;</span>
+          <span class="js-ai-match-icon">${checkSvg}</span>
           <span>${_esc(str)}</span>
         </div>`;
       });
@@ -196,6 +220,9 @@
     }
 
     if (r.gaps?.length) {
+      // SVG icons — replace plain "!" and &#8594; arrow with consistent visuals.
+      const gapSvg = `<svg viewBox="0 0 12 12" fill="none" width="11" height="11" aria-hidden="true"><circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1.4"/><path d="M6 3.5v3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="6" cy="9" r=".7" fill="currentColor"/></svg>`;
+      const arrowSvg = `<svg viewBox="0 0 12 12" fill="none" width="9" height="9" aria-hidden="true"><path d="M2.5 6h7M7 3.5L9.5 6 7 8.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
       html += `<div class="js-ai-section-block js-ai-block--gap ${s()}">
         <div class="js-ai-block-ttl">Gaps</div>`;
       r.gaps.forEach(g => {
@@ -204,15 +231,15 @@
           const gapPart    = g.slice(0, sepIdx);
           const actionPart = g.slice(sepIdx + 3);
           html += `<div class="js-ai-gap-row">
-            <span class="js-ai-gap-icon">!</span>
+            <span class="js-ai-gap-icon">${gapSvg}</span>
             <div class="js-ai-gap-body">
               <div class="js-ai-gap-issue">${_esc(gapPart)}</div>
-              <div class="js-ai-gap-action"><span class="js-ai-gap-action-arrow">&#8594;</span> ${_esc(actionPart)}</div>
+              <div class="js-ai-gap-action"><span class="js-ai-gap-action-arrow">${arrowSvg}</span> ${_esc(actionPart)}</div>
             </div>
           </div>`;
         } else {
           html += `<div class="js-ai-gap-row">
-            <span class="js-ai-gap-icon">!</span>
+            <span class="js-ai-gap-icon">${gapSvg}</span>
             <div class="js-ai-gap-body"><div class="js-ai-gap-issue">${_esc(g)}</div></div>
           </div>`;
         }
@@ -232,10 +259,16 @@
       html += `</div>`;
     }
 
-    // Insight — simplified in CSS (left border + plain text, no gradient or icon chrome)
+    // Insight — elevated treatment in CSS (PR3 polish): tinted bg + accent
+    // border + small lightbulb icon. The non-obvious observation is the
+    // killer feature of paid coaching; this should feel like a discovery.
     if (r.insights) {
+      const bulbSvg = `<svg class="js-ai-insight-bulb" viewBox="0 0 12 12" fill="none" width="11" height="11" aria-hidden="true">
+        <path d="M4 7.5C3 6.5 3 5 4 4s3-1 4 0 1 2.5 0 3.5l-.5.5h-3l-.5-.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+        <path d="M5 9h2M5.2 10.5h1.6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+      </svg>`;
       html += `<div class="js-ai-insight ${s()}">
-        <div class="js-ai-insight-lbl">Coach's take</div>
+        <div class="js-ai-insight-lbl">${bulbSvg}<span>Coach's take</span></div>
         <div class="js-ai-insight-body">${_esc(r.insights)}</div>
       </div>`;
     }
@@ -275,11 +308,38 @@
     setTimeout(() => { lead.textContent = verdict; lead.style.opacity = '1'; }, 250);
   }
 
-  function renderError(panel, msg) {
+  // Errors flowing into here:
+  //   'trial_daily_limit'   — trial user hit 10/day cap. Pitch paid Pro.
+  //   'rate_limit_exceeded' — free user hit 3/day cap. THIS is the upgrade
+  //                           moment — show the same teaser a fresh free
+  //                           panel would have shown, with the same
+  //                           personalized "you're a strong candidate" copy.
+  //   anything else         — Groq overload, parse errors, transient network.
+  //                           Don't conflate with user-facing limit messaging.
+  function renderError(panel, msg, pcr, result) {
     const sec = getOrCreate(panel);
 
+    // Pricing — backend-driven. Fallbacks match config/limits.ts canonical values
+    // so the surface stays correct if the backend serves a stale/older shape.
+    const pr = pcr?.pricing || {
+      monthly_usd: 9, yearly_usd: 84,
+      yearly_savings_label: '2+ months free',
+    };
+    const yearlyPrice  = `$${pr.yearly_usd}`;
+    const monthlyPrice = `$${pr.monthly_usd}`;
+    const savingsLabel = pr.yearly_savings_label || '2+ months free';
+    const trialAnalyzeLimit = pcr?.trial_limits?.analyze ?? 10;
+
+    // Free user hit daily cap → render the upgrade teaser.
+    // String-match on the exact error code from rateLimit.ts. Don't use a
+    // looser includes('rate_limit') here — that would also match Groq's
+    // RATE_LIMIT (different condition entirely, see below).
+    if (msg === 'rate_limit_exceeded') {
+      renderUpgradeTeaser(panel, result, pcr);
+      return;
+    }
+
     if (msg?.includes('trial_daily_limit')) {
-      // Fix: 10 analyses (not 5), $9 (not old $7)
       sec.innerHTML = `
         <div class="js-ai-hdr">
           <span class="js-ai-badge">AI coaching</span>
@@ -294,22 +354,27 @@
           </div>
           <div class="js-ai-limit-title">Daily trial limit reached</div>
           <div class="js-ai-limit-sub">
-            You've used today's 10 trial analyses. Resets at midnight UTC — or upgrade for unlimited.
+            You've used today's ${trialAnalyzeLimit} trial analyses. Resets at midnight UTC — or upgrade for unlimited.
           </div>
           <button class="js-ai-upgrade-btn js-ai-trial-up-btn" type="button" style="margin-top:10px">
-            Get Pro — $90/year (2 months free)
+            Get Pro — ${yearlyPrice}/year (${savingsLabel})
           </button>
-          <div class="js-ai-upgrade-sub" style="margin-top:5px">Or $9/month · Cancel anytime</div>
+          <div class="js-ai-upgrade-sub" style="margin-top:5px">Or ${monthlyPrice}/month · Cancel anytime</div>
         </div>`;
       sec.querySelector('.js-ai-trial-up-btn')
         ?.addEventListener('click', () => chrome.runtime.sendMessage({ type: 'JS_OPEN_UPGRADE', plan: 'annual' }));
       return;
     }
 
-    const rate = msg?.toLowerCase().includes('rate_limit') || msg?.includes('RATE_LIMIT')
-              || msg?.toLowerCase().includes('groq_parse');
+    // Groq overload / transient backend issues — distinct from user limits.
+    // These shouldn't be conflated: telling a free user "service busy" when
+    // they actually hit their cap is misleading.
+    const transient = msg?.includes('GROQ_RATE_LIMIT')
+                   || msg?.includes('GROQ_PARSE_ERROR')
+                   || msg?.includes('SERVER_ERROR')
+                   || msg?.toLowerCase().includes('groq_');
 
-    if (rate) {
+    if (transient) {
       sec.innerHTML = `
         <div class="js-ai-hdr">
           <span class="js-ai-badge">AI coaching</span>

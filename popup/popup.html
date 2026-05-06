@@ -51,54 +51,71 @@
 
       <div class="onb-hero-content">
 
-        <!-- Brand mark: concentric rings + orbiting score badges -->
-        <div class="onb-mark">
-          <div class="onb-ring-outer"></div>
-          <div class="onb-ring-mid"></div>
-          <div class="onb-ring-center">
-            <div class="onb-ring-core">
-              <svg viewBox="0 0 20 20" fill="none" width="14" height="14">
-                <path d="M4.5 10.5l4 4 7-8" stroke="#fff" stroke-width="2.2"
-                      stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </div>
-          </div>
-          <div class="onb-orb onb-orb--green">
-            <span class="onb-orb-num">87</span>
-            <span class="onb-orb-lbl">match</span>
-          </div>
-          <div class="onb-orb onb-orb--amber">
-            <span class="onb-orb-num">54</span>
-            <span class="onb-orb-lbl">partial</span>
-          </div>
-          <div class="onb-orb onb-orb--red">
-            <span class="onb-orb-num">21</span>
-            <span class="onb-orb-lbl">skip</span>
-          </div>
-        </div>
-
         <div class="onb-eyebrow">AI-powered job matching</div>
         <h1 class="onb-title">
           Stop opening jobs<br>
           <em>that don't fit.</em>
         </h1>
+
+        <!-- Functional hero: stylized LinkedIn-card stack with Rolevance
+             badges appearing on each. Demonstrates what the product does
+             rather than decorating it abstractly. The front card is the
+             focal point; two back cards (slightly rotated, smaller) suggest
+             "every card on the page gets one" without crowding. -->
+        <div class="onb-stack" aria-hidden="true">
+
+          <!-- Back card 2 (peeks behind back card 1) -->
+          <div class="onb-card onb-card--back2">
+            <div class="onb-card-row">
+              <div class="onb-card-logo onb-card-logo--c">C</div>
+              <div class="onb-card-body">
+                <div class="onb-card-co">CareerCo</div>
+                <div class="onb-card-title">Full-Stack Engineer</div>
+              </div>
+              <div class="onb-mock-badge onb-mock-badge--amber onb-mock-badge--anim onb-mock-badge--d2">
+                <span class="onb-mock-badge-dot"></span>
+                <span class="onb-mock-badge-num">54</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Back card 1 (peeks behind front card) -->
+          <div class="onb-card onb-card--back1">
+            <div class="onb-card-row">
+              <div class="onb-card-logo onb-card-logo--a">A</div>
+              <div class="onb-card-body">
+                <div class="onb-card-co">Acme Labs</div>
+                <div class="onb-card-title">Backend Engineer</div>
+              </div>
+              <div class="onb-mock-badge onb-mock-badge--red onb-mock-badge--anim onb-mock-badge--d1">
+                <span class="onb-mock-badge-dot"></span>
+                <span class="onb-mock-badge-num">21</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Front card — focal point -->
+          <div class="onb-card onb-card--front">
+            <div class="onb-card-row">
+              <div class="onb-card-logo onb-card-logo--s">S</div>
+              <div class="onb-card-body">
+                <div class="onb-card-co">Stripe</div>
+                <div class="onb-card-title">Senior Backend Engineer</div>
+                <div class="onb-card-meta">Remote · US</div>
+              </div>
+              <div class="onb-mock-badge onb-mock-badge--green onb-mock-badge--anim onb-mock-badge--d0">
+                <span class="onb-mock-badge-dot"></span>
+                <span class="onb-mock-badge-num">87</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
         <p class="onb-desc">
           Rolevance scores every LinkedIn and Indeed listing against your
-          profile — before you click. Know your match instantly.
+          profile — before you click.
         </p>
-
-        <!-- Match tier pills -->
-        <div class="onb-pills">
-          <div class="onb-pill onb-pill--green">
-            <span class="onb-pill-dot"></span>Strong match
-          </div>
-          <div class="onb-pill onb-pill--amber">
-            <span class="onb-pill-dot"></span>Partial fit
-          </div>
-          <div class="onb-pill onb-pill--red">
-            <span class="onb-pill-dot"></span>Skip this one
-          </div>
-        </div>
 
       </div>
     </div><!-- /onb-hero-dark -->
@@ -106,7 +123,7 @@
     <!-- Slide-up CTA panel -->
     <div class="onb-cta-panel">
       <div class="onb-handle"></div>
-      <div class="onb-cta-title">Start your free 7-day trial</div>
+      <div class="onb-cta-title" id="onbCtaTitle">Start your free 7-day trial</div>
 
       <div class="onb-email-wrap">
         <input type="email" id="onbEmail" class="onb-email-inp"
@@ -130,7 +147,7 @@
       <div class="onb-legal-row">
         <span>No credit card</span>
         <span class="onb-legal-dot"></span>
-        <span>7 days free</span>
+        <span id="onbLegalDays">7 days free</span>
         <span class="onb-legal-dot"></span>
         <span>Resets to free plan</span>
       </div>
@@ -138,7 +155,7 @@
       <div class="onb-or-divider"><span>or</span></div>
 
       <button id="onbSkipBtn" class="onb-skip" type="button">
-        Continue with free plan — 3 panels &amp; analyses per day
+        Skip for now — upgrade anytime
       </button>
     </div><!-- /onb-cta-panel -->
 
@@ -161,7 +178,7 @@
       <div class="acc-section open" id="acc-profile">
         <button class="acc-header" type="button">
           <div class="acc-header-left">
-            <div class="acc-icon acc-icon--green">
+            <div class="acc-icon">
               <svg viewBox="0 0 16 16" fill="none" width="12" height="12">
                 <circle cx="8" cy="5" r="3" stroke="currentColor" stroke-width="1.5"/>
                 <path d="M2 14c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
@@ -277,7 +294,7 @@
       <div class="acc-section" id="acc-skills">
         <button class="acc-header" type="button">
           <div class="acc-header-left">
-            <div class="acc-icon acc-icon--amber">
+            <div class="acc-icon">
               <svg viewBox="0 0 16 16" fill="none" width="12" height="12">
                 <polygon points="8,1 10,6 15,6.5 11,10.5 12.2,15.5 8,13 3.8,15.5 5,10.5 1,6.5 6,6"
                          stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
@@ -341,7 +358,7 @@
       <div class="acc-section" id="acc-filters">
         <button class="acc-header" type="button">
           <div class="acc-header-left">
-            <div class="acc-icon acc-icon--red">
+            <div class="acc-icon">
               <svg viewBox="0 0 16 16" fill="none" width="12" height="12">
                 <polygon points="14,2 2,2 7,8.5 7,14 9,13 9,8.5" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
               </svg>

@@ -228,52 +228,7 @@ body {
   padding: 20px 24px 16px; width: 100%;
 }
 
-/* ── Brand mark ─────────────────────────────────────────────────────────── */
-.onb-mark {
-  position: relative; width: 116px; height: 116px; margin-bottom: 16px; flex-shrink: 0;
-}
-@keyframes onbRingPulse {
-  0%,100% { opacity:.55; transform:scale(1); }
-  50%      { opacity:1;   transform:scale(1.04); }
-}
-.onb-ring-outer {
-  position: absolute; inset: 0; border-radius: 50%;
-  border: 1px solid rgba(110,231,183,.16);
-  animation: onbRingPulse 3.2s ease-in-out infinite;
-}
-.onb-ring-mid {
-  position: absolute; inset: 14px; border-radius: 50%;
-  border: 1px solid rgba(110,231,183,.24);
-}
-.onb-ring-center {
-  position: absolute; inset: 28px; border-radius: 50%;
-  background: rgba(5,150,105,.18);
-  border: 1.5px solid rgba(5,150,105,.5);
-  display: flex; align-items: center; justify-content: center;
-}
-.onb-ring-core {
-  width: 32px; height: 32px; border-radius: 50%;
-  background: var(--accent);
-  display: flex; align-items: center; justify-content: center;
-}
-
-/* Orbiting score badges */
-.onb-orb {
-  position: absolute; display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-  border-radius: 9px; border: 1px solid;
-}
-.onb-orb--green { width:38px;height:38px;top:4px;right:2px; background:#082013;border-color:rgba(110,231,183,.3); }
-.onb-orb--amber { width:34px;height:34px;bottom:16px;left:0; background:#1E1204;border-color:rgba(253,211,77,.25); }
-.onb-orb--red   { width:32px;height:32px;bottom:4px;right:8px; background:#1E0606;border-color:rgba(252,165,165,.22); }
-.onb-orb-num { font-size:14px;font-weight:900;letter-spacing:-.5px;line-height:1; }
-.onb-orb--green .onb-orb-num { color:#6EE7B7; }
-.onb-orb--amber .onb-orb-num { color:#FCD34D; }
-.onb-orb--red   .onb-orb-num { color:#FCA5A5; }
-.onb-orb-lbl { font-size:7px;font-weight:700;margin-top:1px;opacity:.65;line-height:1; }
-.onb-orb--green .onb-orb-lbl { color:#6EE7B7; }
-.onb-orb--amber .onb-orb-lbl { color:#FCD34D; }
-.onb-orb--red   .onb-orb-lbl { color:#FCA5A5; }
+/* ── Hero typography ─────────────────────────────────────────────────────── */
 
 /* Eyebrow label */
 .onb-eyebrow {
@@ -284,33 +239,155 @@ body {
 
 /* Headline */
 .onb-title {
-  font-size: 26px; font-weight: 800; color: #fff;
-  letter-spacing: -.9px; line-height: 1.1;
-  text-align: center; margin-bottom: 9px;
+  font-size: 24px; font-weight: 800; color: #fff;
+  letter-spacing: -.7px; line-height: 1.15;
+  text-align: center; margin-bottom: 4px;
 }
 .onb-title em { color: #6EE7B7; font-style: normal; display: block; }
 
-/* Subtitle */
+/* Subtitle — sits below the card stack now */
 .onb-desc {
-  font-size: 13px; color: rgba(255,255,255,.44);
-  line-height: 1.65; text-align: center;
-  margin-bottom: 16px; max-width: 268px;
+  font-size: 12.5px; color: rgba(255,255,255,.5);
+  line-height: 1.55; text-align: center;
+  margin-bottom: 4px; max-width: 270px;
 }
 
-/* Match tier pills */
-.onb-pills { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
-.onb-pill {
-  display: inline-flex; align-items: center; gap: 5px;
-  padding: 5px 11px; border-radius: 99px;
-  font-size: 11px; font-weight: 600; border: 1px solid;
+/* ── Job-card stack (functional hero) ────────────────────────────────────────
+   Three stacked LinkedIn-style cards. Front card is the focal point; two
+   back cards peek behind (slightly rotated, smaller) to suggest "every
+   card on the page gets a Rolevance score". Badges animate in sequence
+   after a short delay so the user sees the scoring happen.
+─────────────────────────────────────────────────────────────────────────── */
+.onb-stack {
+  position: relative;
+  width: 100%; max-width: 304px;
+  height: 138px;
+  margin: 14px 0 14px;
+  flex-shrink: 0;
+  perspective: 800px;
 }
-.onb-pill--green { background:rgba(22,163,74,.13); border-color:rgba(110,231,183,.2); color:#6EE7B7; }
-.onb-pill--amber { background:rgba(217,119,6,.12);  border-color:rgba(253,211,77,.18);  color:#FCD34D; }
-.onb-pill--red   { background:rgba(220,38,38,.11);  border-color:rgba(252,165,165,.18); color:#FCA5A5; }
-.onb-pill-dot { width:5px;height:5px;border-radius:50%;flex-shrink:0; }
-.onb-pill--green .onb-pill-dot { background:#059669; }
-.onb-pill--amber .onb-pill-dot { background:#D97706; }
-.onb-pill--red   .onb-pill-dot { background:#DC2626; }
+
+/* Card base */
+.onb-card {
+  position: absolute; left: 0; right: 0;
+  background: #fff;
+  border-radius: 9px;
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow:
+    0 1px 2px rgba(0,0,0,0.4),
+    0 6px 14px rgba(0,0,0,0.3);
+  padding: 11px 12px;
+  font-family: var(--font);
+  transition: transform .3s ease;
+}
+
+/* Back card 2 — peeks furthest. Tiny rotation, smaller, top-most position. */
+.onb-card--back2 {
+  top: 0;
+  left: 18px; right: 18px;
+  transform: scale(.9) rotate(-1.2deg);
+  opacity: .55;
+}
+
+/* Back card 1 — peeks slightly closer than back2 */
+.onb-card--back1 {
+  top: 24px;
+  left: 9px; right: 9px;
+  transform: scale(.95) rotate(.8deg);
+  opacity: .8;
+}
+
+/* Front card — focal point. Crisp shadow, full opacity. */
+.onb-card--front {
+  top: 56px;
+  box-shadow:
+    0 2px 4px rgba(0,0,0,0.4),
+    0 8px 22px rgba(0,0,0,0.42),
+    0 0 0 1px rgba(110,231,183,0.08);
+}
+
+/* Card content layout */
+.onb-card-row {
+  display: flex; align-items: flex-start; gap: 9px;
+}
+.onb-card-logo {
+  width: 30px; height: 30px;
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 800;
+  color: #fff; flex-shrink: 0;
+  letter-spacing: -.4px;
+}
+.onb-card-logo--s { background: linear-gradient(135deg, #635BFF, #4F46E5); }   /* Stripe-ish */
+.onb-card-logo--a { background: linear-gradient(135deg, #0F766E, #134E4A); }   /* Acme */
+.onb-card-logo--c { background: linear-gradient(135deg, #B91C1C, #7F1D1D); }   /* CareerCo */
+
+.onb-card-body { flex: 1; min-width: 0; }
+.onb-card-co {
+  font-size: 11px; font-weight: 600;
+  color: #6B8A7B; line-height: 1.3;
+}
+.onb-card-title {
+  font-size: 13px; font-weight: 700;
+  color: #0A1A12; line-height: 1.3;
+  margin-top: 1px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.onb-card-meta {
+  font-size: 10.5px; color: #9BB0A5;
+  margin-top: 3px; line-height: 1.2;
+}
+
+/* ── Mock badge — visually identical to the real injected badge ─────────────
+   Same colors, same shape. Keeps onboarding promise consistent with reality. */
+.onb-mock-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 9px 3px 6px;
+  border-radius: 99px;
+  border: 1.5px solid;
+  font-size: 11px; font-weight: 800;
+  letter-spacing: -.2px;
+  flex-shrink: 0;
+  white-space: nowrap;
+  align-self: center;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+.onb-mock-badge--green {
+  background: #dcfce7; color: #14532d;
+  border-color: #86efac;
+}
+.onb-mock-badge--amber {
+  background: #fef3c7; color: #713f12;
+  border-color: #fcd34d;
+}
+.onb-mock-badge--red {
+  background: #fee2e2; color: #7f1d1d;
+  border-color: #fca5a5;
+}
+.onb-mock-badge-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  flex-shrink: 0;
+}
+.onb-mock-badge--green .onb-mock-badge-dot { background: #16a34a; }
+.onb-mock-badge--amber .onb-mock-badge-dot { background: #d97706; }
+.onb-mock-badge--red   .onb-mock-badge-dot { background: #dc2626; }
+.onb-mock-badge-num { font-size: 11px; font-weight: 800; }
+
+/* Badge entrance animation — sequential reveal so the user sees the
+   scoring happen card-by-card. Same spring curve as jsGreenPop on the
+   real injected badge for visual consistency. */
+@keyframes onbBadgePop {
+  0%   { opacity: 0; transform: scale(.4); }
+  60%  { opacity: 1; transform: scale(1.1); }
+  100% { opacity: 1; transform: scale(1); }
+}
+.onb-mock-badge--anim {
+  opacity: 0;
+  animation: onbBadgePop .42s cubic-bezier(.34,1.56,.64,1) forwards;
+}
+.onb-mock-badge--d0 { animation-delay: 350ms; }   /* front card first — most prominent */
+.onb-mock-badge--d1 { animation-delay: 700ms; }   /* back1 next */
+.onb-mock-badge--d2 { animation-delay: 1000ms; }  /* back2 last */
 
 /* ── Slide-up CTA panel ─────────────────────────────────────────────────── */
 .onb-cta-panel {
@@ -352,15 +429,41 @@ body {
 }
 
 /* Primary CTA button */
+/* ══════════════════════════════════════════════════════════════════════════
+   BUTTON SYSTEM (popup context)
+   ──────────────────────────────────────────────────────────────────────────
+   Four canonical roles. Sizes can vary by context (hero CTA can be taller
+   than an inline form button), but visual treatment must not diverge.
+
+   ROLE         LOOK                                      USE FOR
+   primary      Solid var(--accent), white text, shadow   Single most-important
+                                                          action on the screen
+   secondary    Translucent white border on dark, or      Restore, share, less
+                outlined surface on light                 critical confirmations
+   ghost        No background, just text colour, hover    "Skip", "Cancel",
+                lifts colour                              dismissals, "Or X"
+                                                          links
+   destructive  Solid red                                 Delete, irreversible
+
+   Existing class names are kept so HTML doesn't have to retag everywhere.
+   The base styles below establish the canonical look — class-specific rules
+   (`.onb-cta`, `.dash-upgrade-cta`, etc.) only override size/spacing.
+═══════════════════════════════════════════════════════════════════════════ */
+/* PRIMARY — hero CTA (top of onboarding). Larger (46px) for the focal moment. */
 .onb-cta {
   width: 100%; height: 46px; border: none; border-radius: 12px;
-  background: linear-gradient(135deg, #059669, #047857);
+  background: var(--accent);
   color: #fff; font-size: 13.5px; font-weight: 800;
   cursor: pointer; font-family: var(--font); letter-spacing: -.15px;
-  transition: background .14s; margin-bottom: 8px;
+  box-shadow: 0 2px 8px rgba(5,150,105,.28);
+  transition: background .14s, box-shadow .14s, transform .1s;
+  margin-bottom: 8px;
 }
-.onb-cta:hover   { background: linear-gradient(135deg, #047857, #065F46); }
-.onb-cta:active  { transform: scale(.99); }
+.onb-cta:hover:not(:disabled) {
+  background: var(--acc-d);
+  box-shadow: 0 3px 12px rgba(5,150,105,.36);
+}
+.onb-cta:active:not(:disabled) { transform: scale(.99); }
 .onb-cta:disabled { opacity: .55; cursor: not-allowed; }
 
 /* Legal pills row */
@@ -426,14 +529,17 @@ body {
   background: var(--surf-2);
 }
 .acc-header-left { display: flex; align-items: center; gap: 9px; }
+/* Section icon — neutral. Was using semantic colors decoratively
+   (Profile=green, Skills=amber, Filters=red), which diluted the
+   match-strength color vocabulary used everywhere else. Navigation
+   chrome stays neutral; semantic colors belong to semantic things. */
 .acc-icon {
   width: 26px; height: 26px; border-radius: 7px;
   display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0; border: 1px solid transparent;
+  flex-shrink: 0;
+  background: var(--surf-2); color: var(--text-2);
+  border: 1px solid var(--border);
 }
-.acc-icon--green { background: var(--acc-l);   color: var(--accent); border-color: var(--acc-b); }
-.acc-icon--amber { background: var(--amber-l); color: var(--amber);  border-color: var(--amber-b); }
-.acc-icon--red   { background: var(--red-l);   color: var(--red);    border-color: var(--red-b); }
 .acc-title { font-size: 13px; font-weight: 700; color: var(--text-1); letter-spacing: -0.1px; }
 .acc-count {
   font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 99px;
@@ -599,32 +705,50 @@ body {
 
 /* ══════════════════════════════════════════════════════════════════════════
    SKILLS TIERS
+   ──────────────────────────────────────────────────────────────────────────
+   Three tiers (Critical/Primary/Secondary) with consistent visual treatment.
+   The previous design used per-tier gradient backgrounds + amber/green/gray
+   tile colors that read as three separate components stacked. Now: one
+   container language, a small colored dot on the left to indicate criticality,
+   and minimal chrome.
 ══════════════════════════════════════════════════════════════════════════ */
 .skill-tier {
   display: flex; flex-direction: column; gap: 8px;
-  padding: 12px; border-radius: var(--r-lg);
-  border: 1.5px solid var(--border); background: var(--surf-2);
+  padding: 11px 12px 12px; border-radius: var(--r-lg);
+  border: 1px solid var(--border); background: var(--surface);
+  position: relative;
 }
-.tier--critical { background: linear-gradient(135deg,#FFFBEB,#FFF8E0); border-color:#EFD87A; }
-.tier--primary  { background: linear-gradient(135deg,#F0FDF8,#ECFDF5); border-color:#A7F3D0; }
-.tier--secondary { background: var(--surf-2); border-color: var(--border); }
-.tier-hdr { display: flex; align-items: center; gap: 9px; }
+/* Tier accent — a 3px colored bar on the left edge.
+   Replaces full-tile gradients with a quiet criticality cue. */
+.skill-tier::before {
+  content: ''; position: absolute;
+  left: 0; top: 8px; bottom: 8px;
+  width: 3px; border-radius: 0 2px 2px 0;
+  background: var(--border-2);
+}
+.tier--critical::before  { background: var(--amber); }
+.tier--primary::before   { background: var(--accent); }
+.tier--secondary::before { background: var(--border-2); }
+
+.tier-hdr { display: flex; align-items: baseline; gap: 8px; }
+/* Tier label — small uppercase text, no badge pill */
 .tier-badge {
-  display: inline-flex; align-items: center; height: 19px; padding: 0 7px;
-  border-radius: 5px; font-size: 9.5px; font-weight: 800;
-  letter-spacing: .04em; text-transform: uppercase; flex-shrink: 0;
+  font-size: 10px; font-weight: 700;
+  letter-spacing: .07em; text-transform: uppercase;
+  flex-shrink: 0;
 }
-.tier-badge--crit { background: var(--amber); color: #fff; }
-.tier-badge--prim { background: var(--accent); color: #fff; }
-.tier-badge--sec  { background: var(--border-2); color: var(--text-2); }
-.tier-meta { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.tier-badge--crit { color: #B45309; }
+.tier-badge--prim { color: var(--acc-d); }
+.tier-badge--sec  { color: var(--text-3); }
+
+.tier-meta { flex: 1; min-width: 0; }
 .tier-cap {
-  font-size: 10px; font-weight: 600; color: var(--text-3);
-  padding: 1px 6px; border-radius: 99px; background: rgba(255,255,255,0.7);
-  border: 1px solid var(--border);
+  font-size: 10.5px; font-weight: 500; color: var(--text-3);
 }
-.tier-impact { font-size: 11px; font-weight: 500; color: var(--text-3); font-style: italic; }
-.tier-impact--crit { color: #9A5800; }
+/* Impact descriptor — compact caption under the header.
+   Was full-row italic — now sits inline next to tier label, smaller. */
+.tier-impact { font-size: 10.5px; font-weight: 500; color: var(--text-4); }
+.tier-impact--crit { color: #B45309; }
 .tier-impact--prim { color: var(--acc-d); }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -660,6 +784,19 @@ body {
 }
 .dash-tier-card--trial { background: #FFFDF5; border-color: #FCD34D; }
 .dash-tier-card--pro   { background: #F7FDF9; border-color: var(--acc-b); }
+/* Free tier (no upgrade button) — informational, left-aligned, slightly
+   tighter. Part of the dashboard demotion: one upgrade surface lives in
+   the bottom upgrade card; this card just states the user's status. */
+.dash-tier-card--free-info {
+  justify-content: flex-start;
+  padding: 9px 13px;
+}
+/* Trial tier — same demotion as free. The bottom upgrade card carries the
+   conversion CTA; this card just shows day count + urgency. */
+.dash-tier-card--trial-info {
+  justify-content: flex-start;
+  padding: 9px 13px;
+}
 .dash-tier-left { display: flex; align-items: center; gap: 8px; }
 .dash-tier-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
 .dash-tier-dot--green { background: var(--accent); }
@@ -743,7 +880,11 @@ body {
 .dash-launch-txt { flex: 1; text-align: left; min-width: 0; }
 .dash-launch-name { font-size: 12.5px; font-weight: 700; color: var(--text-1); }
 .dash-launch-hint { font-size: 10.5px; color: var(--text-3); margin-top: 1px; }
-.dash-launch-arr { color: var(--border-2); font-size: 14px; flex-shrink: 0; }
+.dash-launch-arr {
+  color: var(--border-2); flex-shrink: 0;
+  display: inline-flex; align-items: center; line-height: 0;
+}
+.dash-launch-arr svg { display: block; }
 
 /* Profile completeness card — compact, not a hero */
 .dash-profile-card {
@@ -785,15 +926,119 @@ body {
 .dash-upgrade-price { display: flex; align-items: flex-end; gap: 1px; flex-shrink: 0; }
 .dash-upgrade-num { font-size: 26px; font-weight: 800; color: #fff; letter-spacing: -0.8px; line-height: 1; }
 .dash-upgrade-mo  { font-size: 11px; color: rgba(255,255,255,0.4); padding-bottom: 2px; }
+/* PRIMARY — inside the dark upgrade card. Smaller (38px) for context fit. */
 .dash-upgrade-cta {
   width: 100%; height: 38px; border: none; border-radius: 8px;
   background: var(--accent);
   color: #fff; font-size: 13px; font-weight: 800;
-  cursor: pointer; font-family: var(--font); transition: background .13s;
+  cursor: pointer; font-family: var(--font);
+  box-shadow: 0 2px 8px rgba(5,150,105,.28);
+  transition: background .13s, box-shadow .13s, transform .1s;
 }
-.dash-upgrade-cta:hover { background: var(--acc-d); }
-.dash-upgrade-cta--amber { background: #D97706; }
-.dash-upgrade-cta--amber:hover { background: #B45309; }
+.dash-upgrade-cta:hover:not(:disabled) {
+  background: var(--acc-d);
+  box-shadow: 0 3px 12px rgba(5,150,105,.36);
+}
+.dash-upgrade-cta:active:not(:disabled) { transform: scale(.99); }
+.dash-upgrade-cta--amber { background: #D97706; box-shadow: 0 2px 8px rgba(217,119,6,.28); }
+.dash-upgrade-cta--amber:hover { background: #B45309; box-shadow: 0 3px 12px rgba(217,119,6,.36); }
+
+/* SECONDARY — outlined treatment for when this CTA is the alternative path
+   (e.g. "Subscribe" sitting below the trial form, where trial is primary). */
+.dash-upgrade-cta--secondary {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.22);
+  color: rgba(255,255,255,0.85);
+  font-weight: 700;
+  box-shadow: none;
+}
+.dash-upgrade-cta--secondary:hover:not(:disabled) {
+  background: rgba(255,255,255,0.06);
+  border-color: rgba(255,255,255,0.32);
+  box-shadow: none;
+}
+
+/* ── Plan toggle (Monthly / Annual) ────────────────────────────────────────
+   Sits inside the dark upgrade card. Two side-by-side buttons; user picks
+   one, the rest of the upgrade flow uses that selection. The CSS for these
+   classes was missing from the codebase — buttons rendered as raw browser
+   white-background defaults, hence the "white bar" look in the screenshots. */
+.dash-plan-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.dash-plan-btn {
+  position: relative;
+  display: flex; flex-direction: column; align-items: flex-start; justify-content: center;
+  gap: 2px;
+  padding: 9px 11px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 8px;
+  font-family: var(--font); cursor: pointer;
+  transition: background .12s, border-color .12s, transform .1s;
+  text-align: left;
+}
+.dash-plan-btn:hover {
+  background: rgba(255,255,255,0.08);
+  border-color: rgba(255,255,255,0.22);
+}
+.dash-plan-btn:active { transform: scale(.99); }
+
+/* Active state — accent-tinted background with a brighter border */
+.dash-plan-btn--active {
+  background: rgba(16,185,129,0.14);
+  border-color: rgba(110,231,183,0.55);
+}
+.dash-plan-btn--active:hover {
+  background: rgba(16,185,129,0.18);
+  border-color: rgba(110,231,183,0.7);
+}
+
+.dash-plan-label {
+  font-size: 10.5px; font-weight: 700;
+  color: rgba(255,255,255,0.6);
+  text-transform: uppercase; letter-spacing: .06em;
+}
+.dash-plan-btn--active .dash-plan-label {
+  color: #6EE7B7;
+}
+.dash-plan-price {
+  font-size: 16px; font-weight: 800;
+  color: #fff; letter-spacing: -.4px;
+  display: inline-flex; align-items: baseline;
+}
+.dash-plan-period {
+  font-size: 10.5px; font-weight: 600;
+  color: rgba(255,255,255,0.45);
+  margin-left: 1px; letter-spacing: 0;
+}
+.dash-plan-btn--active .dash-plan-period {
+  color: rgba(255,255,255,0.65);
+}
+
+/* Savings badge — small chip in the top-right of the annual button */
+.dash-plan-badge {
+  position: absolute;
+  top: -6px; right: 7px;
+  font-size: 9px; font-weight: 800;
+  letter-spacing: .04em;
+  padding: 2px 6px; border-radius: 99px;
+  background: var(--accent); color: #fff;
+  white-space: nowrap;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+}
+
+/* Detail line below the toggle (e.g. "Billed $84/year") */
+.dash-plan-detail {
+  font-size: 11px; color: rgba(255,255,255,0.5);
+  text-align: center;
+  margin-bottom: 4px;
+}
+.dash-plan-billed { font-weight: 500; }
+
 /* Single column, readable size — replaces tiny 2-col grid */
 .dash-upgrade-feats { display: flex; flex-direction: column; gap: 6px; }
 .dash-upgrade-feat {
@@ -804,8 +1049,9 @@ body {
   width: 14px; height: 14px; border-radius: 4px;
   background: rgba(110,231,183,0.15); border: 1px solid rgba(110,231,183,0.3);
   display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0; font-size: 9px; color: #6EE7B7;
+  flex-shrink: 0; color: #6EE7B7;
 }
+.dash-upgrade-check svg { display: block; }
 .dash-restore-link {
   background: none; border: none; font-size: 11px; color: rgba(255,255,255,0.4);
   cursor: pointer; font-family: var(--font); text-align: center;
@@ -821,17 +1067,24 @@ body {
   padding: 0 10px; font-size: 12.5px; font-family: var(--font);
   color: #fff; background: rgba(255,255,255,.08); outline: none;
 }
-.dash-trial-email-inp::placeholder { color: rgba(255,255,255,.3); }
+.dash-trial-email-inp::placeholder { color: rgba(255,255,255,.5); }
 .dash-trial-email-inp:focus { border-color: rgba(110,231,183,.45); }
+/* PRIMARY — inline form button (trial activation). 36px to fit the email row. */
 .dash-trial-btn {
   height: 36px; padding: 0 14px; border-radius: var(--r);
-  background: #059669; border: none;
+  background: var(--accent); border: none;
   color: #fff; font-size: 12.5px; font-weight: 700;
   cursor: pointer; font-family: var(--font); white-space: nowrap;
-  flex-shrink: 0; transition: background .13s;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(5,150,105,.28);
+  transition: background .13s, box-shadow .13s, transform .1s;
 }
-.dash-trial-btn:hover:not(:disabled)  { background: #047857; }
-.dash-trial-btn:disabled { opacity: .45; cursor: not-allowed; }
+.dash-trial-btn:hover:not(:disabled) {
+  background: var(--acc-d);
+  box-shadow: 0 3px 12px rgba(5,150,105,.36);
+}
+.dash-trial-btn:active:not(:disabled) { transform: scale(.98); }
+.dash-trial-btn:disabled { opacity: .45; cursor: not-allowed; box-shadow: none; }
 
 /* "or" divider inside upgrade card */
 .dash-or-row {
@@ -894,6 +1147,22 @@ body {
   border: 1px solid rgba(52,211,153,0.28);
 }
 .save-toast--hidden { display: none; }
+
+/* Pro upgrade celebration. The user just paid — the toast should feel
+   like a confirmation, not a banal save acknowledgement. Brief scale
+   pulse + accent glow on first reveal. Subtle, not childish. */
+.save-toast--success {
+  background: rgba(16,185,129,0.22);
+  color: #A7F3D0;
+  border-color: rgba(110,231,183,0.45);
+  font-weight: 700;
+  animation: proCelebrate .9s cubic-bezier(.34,1.56,.64,1) 1;
+}
+@keyframes proCelebrate {
+  0%   { transform: scale(.95); box-shadow: 0 0 0 rgba(16,185,129,0); }
+  40%  { transform: scale(1.03); box-shadow: 0 0 22px rgba(16,185,129,0.45); }
+  100% { transform: scale(1);    box-shadow: 0 0 0 rgba(16,185,129,0); }
+}
 
 /* ══════════════════════════════════════════════════════════════════════════
    TRACKER
@@ -962,7 +1231,10 @@ body {
   transition: opacity .12s; font-family: inherit; background: transparent;
 }
 .tk-status-pill:hover { opacity: .8; }
-.tk-chevron { font-size: 9px; opacity: .55; }
+.tk-status-icon { display: inline-flex; align-items: center; line-height: 0; }
+.tk-status-icon svg { display: block; }
+.tk-chevron { display: inline-flex; align-items: center; opacity: .55; line-height: 0; }
+.tk-chevron svg { display: block; }
 .tk-status--saved     { border-color: var(--acc-b); color: var(--acc-d); background: var(--acc-l); }
 .tk-status--applied   { border-color:#a5f3fc; color:#0e7490; background:#ecfeff; }
 .tk-status--interview { border-color:#bbf7d0; color:#166534; background:#f0fdf4; }
@@ -977,6 +1249,7 @@ body {
   color: var(--text-2); cursor: pointer; text-align: left; font-family: inherit; transition: background .1s;
 }
 .tk-status-opt:hover { background: var(--surf-2); }
+.tk-status-opt svg { flex-shrink: 0; }
 .tk-confirm { padding: 11px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .tk-confirm-msg  { font-size: 12.5px; color: var(--text-1); font-weight: 500; flex: 1; }
 .tk-confirm-btns { display: flex; gap: 6px; flex-shrink: 0; }
@@ -992,7 +1265,11 @@ body {
   display: flex; flex-direction: column; align-items: center;
   justify-content: center; padding: 36px 20px; text-align: center; gap: 8px;
 }
-.tk-empty-icon  { font-size: 28px; margin-bottom: 4px; }
+.tk-empty-icon  {
+  margin-bottom: 8px;
+  color: var(--text-4);
+  display: flex; align-items: center; justify-content: center;
+}
 .tk-empty-title { font-size: 13.5px; font-weight: 700; color: var(--text-1); }
 .tk-empty-sub   { font-size: 12px; color: var(--text-3); line-height: 1.5; max-width: 230px; }
 .tk-empty-cta {
@@ -1023,3 +1300,36 @@ body {
 .js-db-save-btn:hover:not(:disabled) { background: rgba(255,255,255,0.28); }
 .js-db-save-btn:disabled { opacity: .6; cursor: default; }
 .js-db-save-btn--saved { background: rgba(255,255,255,0.28); border-color: rgba(255,255,255,0.6); }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   REDUCED MOTION
+   ──────────────────────────────────────────────────────────────────────────
+   Respects the user's OS-level "reduce motion" preference. Decorative
+   animations (badge entrance pulses, urgency glows, ring pulses) are
+   suppressed; functional transitions (button hovers, focus rings) stay
+   short and crisp. Accessibility win at no cost to the rest of the design.
+══════════════════════════════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+  /* Suppress all infinite/spring-bounce animations */
+  .header-upgrade-btn--urgent,
+  .header-trial-dot,
+  .onb-mock-badge--anim,
+  .acc-section.open .acc-body,
+  .scoring-pulse,
+  .autosave-status--saved {
+    animation: none !important;
+  }
+  /* Show the badges immediately, no entrance pop */
+  .onb-mock-badge--anim {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  /* Functional transitions kept short rather than disabled — abrupt
+     state changes feel broken even with reduced motion preference. */
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .08s !important;
+    scroll-behavior: auto !important;
+  }
+}

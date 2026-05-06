@@ -75,7 +75,11 @@
     const btn = document.createElement('button');
     btn.className = 'js-close-btn';
     btn.setAttribute('aria-label', 'Close');
-    btn.innerHTML = '&times;';
+    // Inline SVG X — replaces &times; for consistent rendering across platforms.
+    btn.innerHTML = `<svg viewBox="0 0 14 14" fill="none" width="11" height="11" aria-hidden="true">
+      <path d="M3.5 3.5l7 7M10.5 3.5l-7 7" stroke="currentColor" stroke-width="1.6"
+            stroke-linecap="round"/>
+    </svg>`;
     btn.addEventListener('click', e => { e.stopPropagation(); hidePanel(); });
     return btn;
   }
@@ -136,13 +140,23 @@
     return bar;
   }
 
+  // Criterion icon SVGs — used in the criteria breakdown.
+  // "~" tilde for partial was particularly inconsistent — renders at varying
+  // vertical positions across fonts. SVGs render identically anywhere.
+  const CRIT_SVG = {
+    pass:    `<svg viewBox="0 0 12 12" fill="none" width="9" height="9" aria-hidden="true"><path d="M2.5 6l2.5 2.5L9.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+    partial: `<svg viewBox="0 0 12 12" fill="none" width="9" height="9" aria-hidden="true"><path d="M2.5 6h7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`,
+    fail:    `<svg viewBox="0 0 12 12" fill="none" width="9" height="9" aria-hidden="true"><path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`,
+    unknown: `<svg viewBox="0 0 12 12" fill="none" width="9" height="9" aria-hidden="true"><circle cx="6" cy="6" r="1.4" fill="currentColor"/></svg>`,
+  };
+
   // ── Criterion row ──────────────────────────────────────────────────────────
   function buildRow(c) {
     const row  = document.createElement('div');
     row.className = `js-crit js-crit--${c.status}`;
     const icon = document.createElement('span');
     icon.className = 'js-crit-icon';
-    icon.textContent = { pass: '✓', partial: '~', fail: '✗', unknown: '·' }[c.status] || '·';
+    icon.innerHTML = CRIT_SVG[c.status] || CRIT_SVG.unknown;
     const body = document.createElement('div');
     body.className = 'js-crit-body';
     const name = document.createElement('div');
@@ -192,154 +206,202 @@
   }
 
   // ── Limit panel ────────────────────────────────────────────────────────────
-  // Amber light header — consistent with the panel's visual language.
-  // Green upgrade button — on-brand.
+  // Three distinct branches based on the user's eligibility for trial.
+  //
+  // 1. Free user, trial available  → trial-first: inline email activation,
+  //                                  paid as quiet secondary
+  // 2. Free user, trial used       → paid-only: Get Pro CTA
+  // 3. Trial user, daily cap hit   → keep-Pro CTA, trial days remaining
+  //                                  shown in footer for urgency context
+  //
+  // Each branch has exactly one primary action. Removed from previous design:
+  // the "your-plan-includes" box (3 limit tiles) and the in-panel Pro feature
+  // list — both contributed to wall-of-content fatigue at the moment of
+  // mild user frustration. Premium products use this moment for one decision,
+  // not a comparison table.
   function createLimitPanel(result) {
-    const resets  = timeUntilReset(result.resetAt);
-    const limit   = result.limit || (result.trial ? 10 : 3);
-    const isTrial = !!result.trial;
+    const resets        = timeUntilReset(result.resetAt);
+    const isTrial       = !!result.trial;
+    const trialAvailable = !!result.trial_available;
+    const trialDaysLeft = result.trialDaysLeft;
+    const trialDur      = result.trial_duration_days ?? 7;
+
+    // Backend-driven pricing — fallbacks match config/limits.ts canonical values.
+    const pr = result.pricing || {
+      monthly_usd: 9, yearly_usd: 84, yearly_savings_label: '2+ months free',
+    };
+    const monthlyPrice = `$${pr.monthly_usd}`;
+    const yearlyPrice  = `$${pr.yearly_usd}`;
+    const savingsLabel = pr.yearly_savings_label || '2+ months free';
 
     const panel = document.createElement('div');
     panel.className = 'js-panel js-limit-panel';
 
-    // Amber header (not dark navy)
+    // ── Header (shared across all branches) ──────────────────────────────────
+    const headlineText = isTrial
+      ? "Out of trial panels for today"
+      : "Out of panels for today";
+
     const hdr = document.createElement('div');
-    hdr.className = 'js-lp-hdr';
+    hdr.className = 'js-lp2-hdr';
     hdr.innerHTML = `
-      <div class="js-lp-icon">
-        <svg viewBox="0 0 24 24" fill="none" width="20" height="20">
-          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.8"/>
-          <line x1="12" y1="7" x2="12" y2="13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-          <circle cx="12" cy="16.5" r="1" fill="currentColor"/>
-        </svg>
-      </div>
-      <div class="js-lp-hdr-text">
-        <div class="js-lp-title">Daily limit reached</div>
-        <div class="js-lp-sub">${
-          isTrial
-            ? `You've reached today's trial panel limit (${limit}/day)`
-            : `You've used all ${limit} of your free panels today`
-        }</div>
+      <div class="js-lp2-hdr-text">
+        <div class="js-lp2-title">${headlineText}</div>
+        <div class="js-lp2-sub">Resets in <strong>${resets}</strong></div>
       </div>`;
     hdr.appendChild(makeCloseBtn());
     panel.appendChild(hdr);
 
-    const timer = document.createElement('div');
-    timer.className = 'js-lp-timer';
-    timer.innerHTML = `
-      <svg viewBox="0 0 24 24" fill="none" width="13" height="13">
-        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.8"/>
-        <polyline points="12 6 12 12 16 14" stroke="currentColor" stroke-width="1.8"
-                  stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-      <span>Resets in <strong>${resets}</strong> at midnight UTC</span>`;
-    panel.appendChild(timer);
+    // ── Body — branches by eligibility ───────────────────────────────────────
+    const body = document.createElement('div');
+    body.className = 'js-lp2-body';
 
-    const planDiv = document.createElement('div');
-    planDiv.className = 'js-lp-plan';
-    if (isTrial) {
-      // Fix: 10 analyses (not 5)
-      planDiv.innerHTML = `
-        <div class="js-lp-plan-label">Your trial includes</div>
-        <div class="js-lp-plan-limits">
-          <div class="js-lp-limit-item js-lp-limit--used">
-            <span class="js-lp-limit-num">${limit}</span>
-            <span class="js-lp-limit-name">panels / day</span>
-          </div>
-          <div class="js-lp-limit-item">
-            <span class="js-lp-limit-num">10</span>
-            <span class="js-lp-limit-name">AI analyses / day</span>
-          </div>
-          <div class="js-lp-limit-item">
-            <span class="js-lp-limit-num">${result.trialDaysLeft ?? '—'}</span>
-            <span class="js-lp-limit-name">days remaining</span>
-          </div>
-        </div>`;
+    if (!isTrial && trialAvailable) {
+      body.appendChild(_buildLpTrialOffer(panel, trialDur, yearlyPrice, savingsLabel));
+    } else if (!isTrial) {
+      body.appendChild(_buildLpPaidPitch(yearlyPrice, monthlyPrice, savingsLabel, false));
     } else {
-      planDiv.innerHTML = `
-        <div class="js-lp-plan-label">Your free plan includes</div>
-        <div class="js-lp-plan-limits">
-          <div class="js-lp-limit-item js-lp-limit--used">
-            <span class="js-lp-limit-num">${limit}</span>
-            <span class="js-lp-limit-name">panels / day</span>
-          </div>
-          <div class="js-lp-limit-item">
-            <span class="js-lp-limit-num">3</span>
-            <span class="js-lp-limit-name">AI analyses / day</span>
-          </div>
-          <div class="js-lp-limit-item">
-            <span class="js-lp-limit-num">7</span>
-            <span class="js-lp-limit-name">day free trial</span>
-          </div>
-        </div>`;
+      body.appendChild(_buildLpPaidPitch(yearlyPrice, monthlyPrice, savingsLabel, true));
     }
-    panel.appendChild(planDiv);
+    panel.appendChild(body);
 
-    const divider = document.createElement('div');
-    divider.className = 'js-lp-divider';
-    panel.appendChild(divider);
-
-    const upgrade = document.createElement('div');
-    upgrade.className = 'js-lp-upgrade';
-    upgrade.innerHTML = `
-      <div class="js-lp-upgrade-hdr">
-        <div class="js-lp-upgrade-title">Rolevance Pro</div>
-        <div class="js-lp-upgrade-price">$7.50<span>/mo</span></div>
-      </div>
-      <div class="js-lp-upgrade-billed">Billed $90/year — 2 months free</div>
-      <div class="js-lp-features">
-        <div class="js-lp-feature">
-          <svg viewBox="0 0 16 16" fill="none" width="12" height="12">
-            <path d="M3 8.5l3.5 3.5 6.5-7" stroke="currentColor" stroke-width="1.8"
-                  stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          <span><strong>Unlimited</strong> job panels per day</span>
-        </div>
-        <div class="js-lp-feature">
-          <svg viewBox="0 0 16 16" fill="none" width="12" height="12">
-            <path d="M3 8.5l3.5 3.5 6.5-7" stroke="currentColor" stroke-width="1.8"
-                  stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          <span><strong>Unlimited</strong> AI coaching per panel</span>
-        </div>
-        <div class="js-lp-feature">
-          <svg viewBox="0 0 16 16" fill="none" width="12" height="12">
-            <path d="M3 8.5l3.5 3.5 6.5-7" stroke="currentColor" stroke-width="1.8"
-                  stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          <span>Cancel anytime · no commitment</span>
-        </div>
-      </div>`;
-
-    // Annual as primary CTA — best value, leads with $90/year
-    const upgradeBtn = document.createElement('button');
-    upgradeBtn.className = 'js-lp-upgrade-btn';
-    upgradeBtn.textContent = isTrial
-      ? 'Keep Pro — $90/year (2 months free)'
-      : 'Get Pro — $90/year (2 months free)';
-    upgradeBtn.addEventListener('click', e => {
-      e.stopPropagation();
-      chrome.runtime.sendMessage({ type: 'JS_OPEN_UPGRADE', plan: 'annual' });
-    });
-    upgrade.appendChild(upgradeBtn);
-
-    // Monthly as a quiet secondary option
-    const monthlyLink = document.createElement('button');
-    monthlyLink.className = 'js-lp-monthly-link';
-    monthlyLink.textContent = 'Or $9/month, billed monthly';
-    monthlyLink.addEventListener('click', e => {
-      e.stopPropagation();
-      chrome.runtime.sendMessage({ type: 'JS_OPEN_UPGRADE', plan: 'monthly' });
-    });
-    upgrade.appendChild(monthlyLink);
-    panel.appendChild(upgrade);
-
+    // ── Footer ───────────────────────────────────────────────────────────────
     const footer = document.createElement('div');
     footer.className = 'js-panel-footer js-lp-footer';
-    footer.innerHTML = `<strong>Rolevance</strong> <span class="js-panel-footer-tier">· ${isTrial ? 'Trial' : 'Free plan'}</span>`;
+    let footerTier;
+    if (isTrial && trialDaysLeft != null) {
+      footerTier = `Trial · ${trialDaysLeft}d left`;
+    } else if (isTrial) {
+      footerTier = 'Trial';
+    } else {
+      footerTier = 'Free plan';
+    }
+    footer.innerHTML = `<strong>Rolevance</strong> <span class="js-panel-footer-tier">· ${footerTier}</span>`;
     panel.appendChild(footer);
 
     return panel;
+  }
+
+  // ── Trial-offer body (free user, trial available) ───────────────────────────
+  // Inline email activation. On success, calls JS_TRIAL_ACTIVATE via the
+  // service worker. On success the panel reloads — the user clicked because
+  // they wanted analysis on this job, so they should see it.
+  function _buildLpTrialOffer(panelEl, trialDur, yearlyPrice, savingsLabel) {
+    const wrap = document.createElement('div');
+    wrap.className = 'js-lp2-trial-card';
+
+    wrap.innerHTML = `
+      <div class="js-lp2-trial-headline">Want ${trialDur} more days unlimited?</div>
+      <div class="js-lp2-trial-sub">Pro features, no credit card.</div>
+      <div class="js-lp2-trial-row">
+        <input type="email" class="js-lp2-trial-inp" placeholder="your@email.com" autocomplete="email">
+        <button class="js-lp2-trial-btn" type="button">Start trial</button>
+      </div>
+      <div class="js-lp2-trial-msg" role="alert" aria-live="polite"></div>
+      <div class="js-lp2-or">or</div>
+      <button class="js-lp2-paid-link" type="button">Get Pro — ${yearlyPrice}/year (${savingsLabel})</button>
+    `;
+
+    const inp  = wrap.querySelector('.js-lp2-trial-inp');
+    const btn  = wrap.querySelector('.js-lp2-trial-btn');
+    const msg  = wrap.querySelector('.js-lp2-trial-msg');
+    const paid = wrap.querySelector('.js-lp2-paid-link');
+
+    // Match the popup's stricter regex
+    const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+    btn.disabled = true;
+    inp.addEventListener('input', () => {
+      btn.disabled = !inp.value.trim();
+      // Clear error state on retry
+      msg.className = 'js-lp2-trial-msg';
+      msg.textContent = '';
+    });
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !btn.disabled) btn.click();
+    });
+
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const email = (inp.value || '').trim().toLowerCase();
+      if (!EMAIL_RE.test(email) || email.length > 254) {
+        msg.className = 'js-lp2-trial-msg js-lp2-trial-msg--error';
+        msg.textContent = 'Enter a valid email address.';
+        return;
+      }
+      btn.disabled = true;
+      btn.textContent = 'Activating…';
+      msg.className = 'js-lp2-trial-msg';
+      msg.textContent = '';
+
+      chrome.runtime.sendMessage({ type: 'JS_TRIAL_ACTIVATE', email }, (res) => {
+        if (chrome.runtime.lastError || !res) {
+          msg.className = 'js-lp2-trial-msg js-lp2-trial-msg--error';
+          msg.textContent = 'Service unavailable — try again shortly.';
+          btn.disabled = false; btn.textContent = 'Start trial';
+          return;
+        }
+        if (res.ok) {
+          msg.className = 'js-lp2-trial-msg js-lp2-trial-msg--success';
+          msg.textContent = 'Trial activated — reloading job analysis…';
+          // Reload the page so the user gets the panel they came for.
+          // The trial activation has already updated the user's tier on
+          // the backend, and panel-check on next interaction will reflect it.
+          setTimeout(() => location.reload(), 1100);
+        } else if (res.error === 'TRIAL_USED') {
+          msg.className = 'js-lp2-trial-msg js-lp2-trial-msg--error';
+          msg.textContent = 'This email already used a trial. Try Pro to continue.';
+          btn.disabled = false; btn.textContent = 'Start trial';
+        } else {
+          msg.className = 'js-lp2-trial-msg js-lp2-trial-msg--error';
+          msg.textContent = res.message || 'Could not activate — try again.';
+          btn.disabled = false; btn.textContent = 'Start trial';
+        }
+      });
+    });
+
+    paid.addEventListener('click', e => {
+      e.stopPropagation();
+      chrome.runtime.sendMessage({ type: 'JS_OPEN_UPGRADE', plan: 'annual' });
+    });
+
+    return wrap;
+  }
+
+  // ── Paid-only body (trial used or trial in progress) ────────────────────────
+  // No trial offer — straight to Pro. isTrial=true gives the slightly different
+  // "keep" framing for users currently inside their trial.
+  function _buildLpPaidPitch(yearlyPrice, monthlyPrice, savingsLabel, isTrial) {
+    const wrap = document.createElement('div');
+    wrap.className = 'js-lp2-paid-card';
+
+    const headline = isTrial
+      ? "Don't lose your unlimited access"
+      : 'Unlimited panels &amp; AI coaching';
+    const sub = isTrial
+      ? 'Stay on Pro when your trial ends.'
+      : 'Pro removes the daily limits.';
+
+    wrap.innerHTML = `
+      <div class="js-lp2-paid-headline">${headline}</div>
+      <div class="js-lp2-paid-sub">${sub}</div>
+      <button class="js-lp2-cta js-lp2-cta--primary" type="button">
+        ${isTrial ? 'Keep' : 'Get'} Pro — ${yearlyPrice}/year
+        <span class="js-lp2-cta-savings">${savingsLabel}</span>
+      </button>
+      <button class="js-lp2-monthly-link" type="button">Or ${monthlyPrice}/month, billed monthly</button>
+    `;
+
+    wrap.querySelector('.js-lp2-cta--primary').addEventListener('click', e => {
+      e.stopPropagation();
+      chrome.runtime.sendMessage({ type: 'JS_OPEN_UPGRADE', plan: 'annual' });
+    });
+    wrap.querySelector('.js-lp2-monthly-link').addEventListener('click', e => {
+      e.stopPropagation();
+      chrome.runtime.sendMessage({ type: 'JS_OPEN_UPGRADE', plan: 'monthly' });
+    });
+
+    return wrap;
   }
 
   // ── Normal scoring panel ───────────────────────────────────────────────────

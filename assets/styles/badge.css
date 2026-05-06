@@ -394,26 +394,36 @@
   font-size:9.5px!important; font-weight:700!important; flex-shrink:0!important; margin-top:1px!important;
 }
 
-/* ── Insight — simplified. Left border only. No gradient, no emoji, just text. ── */
+/* ── Coach's take — elevated treatment ──────────────────────────────────────
+   The non-obvious observation is the killer feature of paid AI coaching.
+   Previously this was a left-border + plain text — too quiet given that
+   it's the unique value proposition. Now: subtle accent-green tinted
+   background, accent-coloured label with a small lightbulb icon, and a
+   soft shadow that gives the block discovery depth.
+─────────────────────────────────────────────────────────────────────────── */
 .js-ai-insight {
   margin:0 14px 14px!important;
-  padding:11px 13px 11px 14px!important;
-  background:#F7FAF8!important;
-  border:none!important;
+  padding:12px 13px 13px 14px!important;
+  background:linear-gradient(135deg,#F0FDF8,#F7FBF9)!important;
+  border:1px solid rgba(110,231,183,0.35)!important;
   border-left:3px solid #059669!important;
-  border-radius:0!important;
-  box-shadow:none!important;
+  border-radius:8px!important;
+  box-shadow:0 1px 3px rgba(5,150,105,0.06)!important;
 }
 .js-ai-insight-hdr { display:none!important; }
 .js-ai-insight-lbl {
-  font-size:10px!important; font-weight:700!important;
-  color:#6B8A7B!important; text-transform:uppercase!important;
-  letter-spacing:.08em!important; display:block!important; margin-bottom:5px!important;
+  font-size:10px!important; font-weight:800!important;
+  color:#059669!important; text-transform:uppercase!important;
+  letter-spacing:.09em!important;
+  display:flex!important; align-items:center!important; gap:5px!important;
+  margin-bottom:6px!important;
 }
+.js-ai-insight-bulb { color:#059669!important; flex-shrink:0!important; }
 .js-ai-insight-icon { display:none!important; }
 .js-ai-insight-body {
-  font-size:13px!important; color:#163526!important;
-  line-height:1.75!important; font-style:normal!important;
+  font-size:13px!important; color:#0A2A1A!important;
+  line-height:1.65!important; font-style:normal!important;
+  font-weight:500!important;
 }
 
 /* ── Panel footer ─────────────────────────────────────────────────────────── */
@@ -452,7 +462,12 @@
 .js-crit--partial { background:rgba(217,119,6,0.04)!important; }
 .js-crit--fail    { background:rgba(220,38,38,0.04)!important; }
 .js-crit--unknown { background:transparent!important; }
-.js-crit-icon { font-size:11px!important; font-weight:700!important; width:14px!important; text-align:center!important; flex-shrink:0!important; margin-top:2px!important; }
+.js-crit-icon {
+  width:14px!important; height:14px!important;
+  display:inline-flex!important; align-items:center!important; justify-content:center!important;
+  flex-shrink:0!important; margin-top:1px!important;
+}
+.js-crit-icon svg { display:block!important; }
 .js-crit--pass    .js-crit-icon { color:#059669!important; }
 .js-crit--partial .js-crit-icon { color:#D97706!important; }
 .js-crit--fail    .js-crit-icon { color:#DC2626!important; }
@@ -500,25 +515,6 @@
   color:#9BB0A5!important; font-family:var(--js-font)!important;
 }
 
-/* Annual billed detail line inside limit panel */
-.js-lp-upgrade-billed {
-  font-size: 11px!important; color: rgba(5,150,105,.7)!important;
-  font-weight: 600!important; margin-bottom: 10px!important;
-  display: flex!important; align-items: center!important; gap: 5px!important;
-}
-.js-lp-upgrade-billed::before {
-  content: '★'!important; font-size: 9px!important; color: #059669!important;
-}
-
-/* Monthly secondary link below the annual CTA */
-.js-lp-monthly-link {
-  width: 100%!important; background: none!important; border: none!important;
-  font-size: 11px!important; color: #6B8A7B!important;
-  cursor: pointer!important; font-family: var(--js-font)!important;
-  text-align: center!important; padding: 6px 0 0!important;
-  transition: color .12s!important;
-}
-.js-lp-monthly-link:hover { color: #2E4A38!important; }
 .js-shimmer { padding:14px 14px 10px!important; }
 .js-shimmer-ln {
   height:9px!important; border-radius:99px!important;
@@ -551,77 +547,170 @@
 .js-ai-limit-sub   { font-size:11.5px!important; color:#64748b!important; line-height:1.55!important; }
 .js-ai-prompt      { padding:10px 14px!important; font-size:12px!important; color:#6B8A7B!important; font-style:italic!important; }
 
-/* ── Limit panel — amber light header (replaces dark navy) ───────────────────
-   The limit panel is the highest-intent upgrade moment.
-   It must feel like a natural part of the product, not a crash screen.
-─────────────────────────────────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════════════
+   LIMIT PANEL — v6.0 (PR2 rewrite)
+   ──────────────────────────────────────────────────────────────────────────
+   Trial-first when eligible, paid-only when trial used or in progress.
+   Stripped to one primary action. The previous design had 6 stacked blocks
+   (header / timer / plan-includes / divider / Pro card / footer) which was
+   wall-of-content fatigue at the moment of mild user friction.
+   Single-purpose now: surface the wall, offer one path, keep moving.
+═════════════════════════════════════════════════════════════════════════ */
 .js-limit-panel { border-top:4px solid #D97706!important; }
 
-/* Amber light header — matches the panel's overall light visual language */
-.js-lp-hdr {
-  display:flex!important; align-items:flex-start!important; gap:10px!important;
+/* ── Header: amber-tinted, compact, just the why ─────────────────────────── */
+.js-lp2-hdr {
+  display:flex!important; align-items:flex-start!important; gap:12px!important;
   padding:14px 14px 12px!important;
   background:linear-gradient(160deg,#FFFBEB,#FEF3C7)!important;
   border-bottom:1px solid #FDE68A!important;
 }
-.js-lp-icon {
-  width:38px!important; height:38px!important; border-radius:10px!important;
-  background:rgba(217,119,6,0.12)!important; border:1px solid rgba(217,119,6,0.25)!important;
-  display:flex!important; align-items:center!important; justify-content:center!important;
-  color:#D97706!important; flex-shrink:0!important;
+.js-lp2-hdr-text  { flex:1!important; min-width:0!important; }
+.js-lp2-title {
+  font-size:15px!important; font-weight:800!important;
+  color:#78350F!important; letter-spacing:-.2px!important;
+  margin-bottom:3px!important; line-height:1.25!important;
 }
-.js-lp-hdr-text  { flex:1!important; min-width:0!important; }
-.js-lp-title     { font-size:15px!important; font-weight:800!important; color:#78350F!important; letter-spacing:-.2px!important; margin-bottom:2px!important; }
-.js-lp-sub       { font-size:11.5px!important; color:#92400E!important; line-height:1.45!important; opacity:.85!important; }
-
-.js-lp-timer {
-  display:flex!important; align-items:center!important; gap:6px!important;
-  padding:8px 14px!important; font-size:11.5px!important; color:#475569!important;
-  background:#f8fafc!important; border-bottom:1px solid #f1f5f9!important;
+.js-lp2-sub {
+  font-size:11.5px!important; color:#92400E!important;
+  line-height:1.45!important; opacity:.85!important;
 }
-.js-lp-timer strong { color:#0A1A12!important; font-weight:700!important; }
+.js-lp2-sub strong { color:#78350F!important; font-weight:700!important; }
 
-.js-lp-plan        { padding:12px 14px!important; border-bottom:1px solid #f1f5f9!important; }
-.js-lp-plan-label  { font-size:9.5px!important; font-weight:700!important; color:#94a3b8!important; text-transform:uppercase!important; letter-spacing:.07em!important; margin-bottom:8px!important; }
-.js-lp-plan-limits { display:flex!important; gap:6px!important; flex-wrap:wrap!important; }
-.js-lp-limit-item  {
-  display:flex!important; flex-direction:column!important; align-items:center!important;
-  padding:7px 10px!important; border-radius:9px!important;
-  background:#f1f5f9!important; border:1px solid #e2e8f0!important; flex:1!important; min-width:60px!important;
+/* ── Body: container for trial-card or paid-card ─────────────────────────── */
+.js-lp2-body {
+  padding:14px!important; background:#fff!important;
 }
-.js-lp-limit--used { background:#FEF3C7!important; border-color:#FCD34D!important; }
-.js-lp-limit-num   { font-size:18px!important; font-weight:800!important; color:#0A1A12!important; letter-spacing:-.3px!important; line-height:1.1!important; }
-.js-lp-limit--used .js-lp-limit-num { color:#92400E!important; }
-.js-lp-limit-name  { font-size:9.5px!important; color:#64748b!important; text-align:center!important; margin-top:2px!important; line-height:1.3!important; }
 
-.js-lp-divider { height:1px!important; background:#f1f5f9!important; }
-.js-lp-upgrade { padding:14px!important; }
-.js-lp-upgrade-hdr   { display:flex!important; align-items:baseline!important; justify-content:space-between!important; margin-bottom:10px!important; }
-.js-lp-upgrade-title { font-size:13px!important; font-weight:800!important; color:#0A1A12!important; }
-/* Green price — on-brand (was blue, now fixed) */
-.js-lp-upgrade-price { font-size:16px!important; font-weight:800!important; color:#059669!important; letter-spacing:-.3px!important; }
-.js-lp-upgrade-price span { font-size:11.5px!important; font-weight:500!important; color:#6B8A7B!important; }
-.js-lp-features  { display:flex!important; flex-direction:column!important; gap:6px!important; margin-bottom:12px!important; }
-.js-lp-feature   { display:flex!important; align-items:center!important; gap:7px!important; font-size:12px!important; color:#2E4A38!important; }
-.js-lp-feature svg    { color:#059669!important; flex-shrink:0!important; }
-.js-lp-feature strong { color:#0A1A12!important; }
+/* ── Trial offer card ────────────────────────────────────────────────────── */
+.js-lp2-trial-card {
+  display:flex!important; flex-direction:column!important;
+  background:linear-gradient(135deg,#F0FDF8,#ECFDF5)!important;
+  border:1.5px solid #A7F3D0!important;
+  border-radius:11px!important; padding:14px!important;
+}
+.js-lp2-trial-headline {
+  font-size:14.5px!important; font-weight:800!important;
+  color:#065F46!important; letter-spacing:-.25px!important;
+  line-height:1.3!important;
+}
+.js-lp2-trial-sub {
+  font-size:11.5px!important; color:#047857!important;
+  margin-top:3px!important; margin-bottom:11px!important;
+  opacity:.85!important;
+}
+.js-lp2-trial-row {
+  display:flex!important; gap:6px!important; align-items:stretch!important;
+}
+.js-lp2-trial-inp {
+  flex:1!important; min-width:0!important;
+  height:36px!important; padding:0 11px!important;
+  border:1.5px solid #A7F3D0!important; border-radius:8px!important;
+  font-size:12.5px!important; font-family:var(--js-font)!important;
+  color:#0A1A12!important; background:#fff!important;
+  outline:none!important;
+  transition:border-color .12s, box-shadow .12s!important;
+}
+.js-lp2-trial-inp:focus {
+  border-color:#059669!important;
+  box-shadow:0 0 0 3px rgba(5,150,105,.12)!important;
+}
+.js-lp2-trial-inp::placeholder { color:#9BB0A5!important; }
+.js-lp2-trial-btn {
+  height:36px!important; padding:0 14px!important;
+  border:none!important; border-radius:8px!important;
+  background:#059669!important; color:#fff!important;
+  font-size:12.5px!important; font-weight:700!important;
+  font-family:var(--js-font)!important; cursor:pointer!important;
+  white-space:nowrap!important; flex-shrink:0!important;
+  transition:background .12s, opacity .12s!important;
+}
+.js-lp2-trial-btn:hover:not(:disabled) { background:#047857!important; }
+.js-lp2-trial-btn:disabled { opacity:.5!important; cursor:not-allowed!important; }
 
-/* Green upgrade button — on-brand (was blue, now fixed) */
-.js-lp-upgrade-btn {
-  width:100%!important; height:40px!important; border:none!important; border-radius:9px!important;
-  background:#059669!important;
-  color:#fff!important; font-size:13px!important; font-weight:700!important;
-  cursor:pointer!important; font-family:var(--js-font)!important;
-  letter-spacing:-.1px!important; transition:all .14s!important;
+/* Inline message (success / error) — minimal chrome, don't displace layout */
+.js-lp2-trial-msg {
+  font-size:11.5px!important; line-height:1.45!important;
+  margin-top:8px!important; min-height:0!important;
+  transition:color .12s!important;
+}
+.js-lp2-trial-msg:empty { display:none!important; }
+.js-lp2-trial-msg--error    { color:#B91C1C!important; }
+.js-lp2-trial-msg--success  { color:#047857!important; font-weight:600!important; }
+
+/* "or" divider + paid link — quiet secondary path */
+.js-lp2-or {
+  text-align:center!important; font-size:10.5px!important;
+  color:#9BB0A5!important; font-weight:500!important;
+  margin:11px 0 7px!important; text-transform:lowercase!important;
+  letter-spacing:.04em!important;
+}
+.js-lp2-paid-link {
+  display:block!important; width:100%!important;
+  background:transparent!important; border:none!important;
+  font-family:var(--js-font)!important; cursor:pointer!important;
+  font-size:12px!important; font-weight:600!important;
+  color:#6B8A7B!important; text-align:center!important;
+  padding:5px 0!important; transition:color .12s!important;
+}
+.js-lp2-paid-link:hover { color:#163526!important; }
+
+/* ── Paid pitch card (no trial offered) ──────────────────────────────────── */
+.js-lp2-paid-card {
+  display:flex!important; flex-direction:column!important;
+  text-align:center!important; padding:4px 6px!important;
+}
+.js-lp2-paid-headline {
+  font-size:14.5px!important; font-weight:800!important;
+  color:#0A1A12!important; letter-spacing:-.25px!important;
+  line-height:1.3!important;
+}
+.js-lp2-paid-sub {
+  font-size:11.5px!important; color:#6B8A7B!important;
+  margin-top:3px!important; margin-bottom:13px!important;
+  line-height:1.5!important;
+}
+
+/* Primary CTA in paid pitch — green block w/ savings line beneath label */
+.js-lp2-cta {
+  width:100%!important; min-height:46px!important;
+  padding:7px 14px!important; border:none!important;
+  border-radius:9px!important;
+  font-family:var(--js-font)!important; cursor:pointer!important;
+  font-size:13px!important; font-weight:800!important;
+  letter-spacing:-.1px!important;
+  display:flex!important; flex-direction:column!important;
+  align-items:center!important; justify-content:center!important;
+  line-height:1.2!important;
+  transition:transform .1s, box-shadow .14s, background .14s!important;
+}
+.js-lp2-cta--primary {
+  background:#059669!important; color:#fff!important;
   box-shadow:0 2px 8px rgba(5,150,105,.28)!important;
 }
-.js-lp-upgrade-btn:hover {
+.js-lp2-cta--primary:hover {
   background:#047857!important;
   box-shadow:0 3px 12px rgba(5,150,105,.38)!important;
   transform:translateY(-1px)!important;
 }
+.js-lp2-cta--primary:active { transform:translateY(0)!important; }
+.js-lp2-cta-savings {
+  display:block!important; font-size:10.5px!important;
+  font-weight:600!important; opacity:.85!important;
+  margin-top:1px!important; letter-spacing:0!important;
+}
 
-/* Limit panel footer — light (was dark navy, now consistent with panel system) */
+/* Monthly secondary link */
+.js-lp2-monthly-link {
+  width:100%!important; background:none!important; border:none!important;
+  font-size:11.5px!important; color:#6B8A7B!important;
+  cursor:pointer!important; font-family:var(--js-font)!important;
+  text-align:center!important; padding:8px 0 2px!important;
+  transition:color .12s!important;
+}
+.js-lp2-monthly-link:hover { color:#2E4A38!important; }
+
+/* Limit panel footer — light, consistent with panel system */
 .js-lp-footer {
   color:#6B8A7B!important;
   background:#F7FAF8!important;
@@ -738,3 +827,36 @@ div.cardOutline { position:relative!important; padding-bottom:4px; }
 .js-score-tile--red   .js-score-tile-num { color:#991B1B!important; }
 .js-score-tile--gray  .js-score-tile-num { color:#475569!important; }
 .js-score-tile-sub { font-size:8px!important; opacity:.5!important; line-height:1!important; margin-top:2px!important; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   REDUCED MOTION (in-page badges + panel)
+   ──────────────────────────────────────────────────────────────────────────
+   Suppresses decorative animations (loading dot pulse, badge entrance pop,
+   AI-section staggered reveal, shimmer) when the user has expressed a
+   preference for reduced motion. Match-strength colors and content are
+   unaffected — only motion is suppressed.
+══════════════════════════════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+  .js-loading-dot,
+  .js-shimmer-ln,
+  .js-shimmer,
+  .js-db-saving::before {
+    animation: none !important;
+  }
+  .js-ai-stagger,
+  .js-ai-stagger-1, .js-ai-stagger-2, .js-ai-stagger-3,
+  .js-ai-stagger-4, .js-ai-stagger-5, .js-ai-stagger-6 {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .js-badge-entrance,
+  .js-green-pop {
+    animation: none !important;
+  }
+  /* Keep functional transitions snappy but instant */
+  .js-panel *, .js-badge {
+    transition-duration: .08s !important;
+    animation-duration: .01ms !important;
+  }
+}

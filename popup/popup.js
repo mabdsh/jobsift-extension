@@ -2,17 +2,57 @@
 // Complete redesign: inline trial activation, usage bars dashboard, no separate trial screen.
 'use strict';
 
-// ── Pricing — single source of truth ──────────────────────────────────────────
-// Update these when pricing changes. Never hardcode prices elsewhere.
-const PRICE = {
-  monthly: { amount: 9,  display: '$9',   period: '/mo',  label: 'Monthly', detail: 'Billed monthly' },
-  annual:  { amount: 90, display: '$90',  period: '/yr',  label: 'Annual',  detail: '2 months free',
-             perMonth: '$7.50', saving: 'Save $18' },
+// ── Pricing — derived from backend ────────────────────────────────────────────
+// All price strings come from /api/subscription/status, which serves
+// config/limits.ts as the single source of truth. We never hardcode
+// prices in the extension UI — change the price on the server and every
+// open popup reflects it on next load.
+//
+// _getPricing() returns a stable shape consumed by upgrade UI helpers.
+// It tolerates missing _subStatus (first paint, network failure) by
+// falling back to the last-known correct values; the backend is
+// authoritative the moment status arrives.
+const _PRICING_FALLBACK = {
+  monthly_usd: 9, yearly_usd: 84,
+  monthly_label:        '$9/month',
+  yearly_label:         '$84/year',
+  yearly_equivalent:    '$7/month, billed annually',
+  yearly_savings_label: 'Save 22% · 2+ months free',
 };
+
+function _getPricing() {
+  const p = (_subStatus && _subStatus.pricing) || _PRICING_FALLBACK;
+  // Compute the equivalent monthly figure for the annual plan once,
+  // so the toggle UI can show "$7/mo" under the Annual button.
+  const yearlyMonthlyEq = `$${Math.round(p.yearly_usd / 12)}`;
+  return {
+    monthly: {
+      amount:  p.monthly_usd,
+      display: `$${p.monthly_usd}`,
+      period:  '/mo',
+      label:   'Monthly',
+      detail:  'Billed monthly',
+    },
+    annual: {
+      amount:  p.yearly_usd,
+      display: `$${p.yearly_usd}`,
+      period:  '/yr',
+      label:   'Annual',
+      detail:  p.yearly_savings_label,
+      perMonth: yearlyMonthlyEq,
+      saving:   p.yearly_savings_label,
+    },
+  };
+}
 
 // Currently selected plan in upgrade UI — 'monthly' | 'annual'
 // Persists across dashboard re-renders within the session.
 let _selectedPlan = 'annual'; // default to annual (better LTV, usually pre-selected in SaaS)
+
+// Reusable check SVG for the upgrade-feat pills. Inline (no shared file)
+// because popup.js is the single content surface for the popup; centralising
+// here avoids 4 separate copies in the dashboard render code.
+const _CHECK_SVG = '<svg viewBox="0 0 10 10" fill="none" width="9" height="9" aria-hidden="true"><path d="M2 5l2 2 4-4.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
 const MAX_CRITICAL = 4;
 const tags = { roles:[], critical:[], primary:[], secondary:[], deal:[], avoid:[] };
@@ -89,12 +129,31 @@ document.addEventListener('DOMContentLoaded', async () => {
 // Shows the product hero screen with inline trial email activation.
 // No separate trial screen — email goes here, then straight to form/dashboard.
 
+function _onbTrialBtnText() {
+  const days = _subStatus?.trial_duration_days ?? 7;
+  return `Start ${days}-day trial & set up profile →`;
+}
+
 function setupOnboarding() {
   const trialBtn = document.getElementById('onbTrialBtn');
   const skipBtn  = document.getElementById('onbSkipBtn');
 
   trialBtn?.addEventListener('click', handleOnbTrialActivate);
   skipBtn?.addEventListener('click', () => dismissOnboarding(true));
+
+  // Apply the dynamic onboarding copy from _subStatus.trial_duration_days.
+  // All three strings (CTA title, button text, legal pill) trace to TRIAL_DAYS
+  // in config/limits.ts via /api/subscription/status. Falls back to "7" when
+  // status hasn't loaded yet — matches the canonical value.
+  const days = _subStatus?.trial_duration_days ?? 7;
+
+  const ctaTitle = document.getElementById('onbCtaTitle');
+  if (ctaTitle) ctaTitle.textContent = `Start your free ${days}-day trial`;
+
+  const legalDays = document.getElementById('onbLegalDays');
+  if (legalDays) legalDays.textContent = `${days} days free`;
+
+  if (trialBtn) trialBtn.textContent = _onbTrialBtnText();
 
   // Enable button only when email field has content
   const emailInp = document.getElementById('onbEmail');
@@ -123,7 +182,7 @@ async function handleOnbTrialActivate() {
     if (chrome.runtime.lastError || !res) {
       showMsgEl(msg, 'Service unavailable — try again shortly.', 'error');
       btn.disabled    = false;
-      btn.textContent = 'Start 7-day trial & set up profile →';
+      btn.textContent = _onbTrialBtnText();
       return;
     }
 
@@ -142,7 +201,7 @@ async function handleOnbTrialActivate() {
     } else {
       showMsgEl(msg, res.message || 'Could not activate trial — try again.', 'error');
       btn.disabled    = false;
-      btn.textContent = 'Start 7-day trial & set up profile →';
+      btn.textContent = _onbTrialBtnText();
     }
   });
 }
@@ -151,14 +210,12 @@ function showOnboarding() {
   const onb = document.getElementById('onboarding');
   if (onb) onb.style.display = 'flex';
   hideMainContent();
-  document.getElementById('tabBar').style.display = 'none';
 }
 
 function dismissOnboarding(skipTrial = false) {
   const onb = document.getElementById('onboarding');
   if (onb) onb.style.display = 'none';
   showMainContent();
-  document.getElementById('tabBar').style.display = 'flex';
 
   // After trial activation: new users → profile form to fill in.
   // Returning users (already have profile) → dashboard.
@@ -177,11 +234,19 @@ function dismissOnboarding(skipTrial = false) {
 function showMainContent() {
   const mc = document.getElementById('mainContent');
   if (mc) { mc.style.display = 'flex'; mc.style.flexDirection = 'column'; }
+  // Tab bar belongs with main content — any code path that reveals
+  // mainContent should reveal the tabs too. Previously this was only set
+  // inside dismissOnboarding(), so returning users (who skip onboarding)
+  // never saw the tab bar and couldn't reach the Tracker tab.
+  const tb = document.getElementById('tabBar');
+  if (tb) tb.style.display = 'flex';
 }
 
 function hideMainContent() {
   const mc = document.getElementById('mainContent');
   if (mc) mc.style.display = 'none';
+  const tb = document.getElementById('tabBar');
+  if (tb) tb.style.display = 'none';
 }
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
@@ -260,7 +325,7 @@ function renderDashboard(status) {
           <div class="dash-launch-name">LinkedIn Jobs</div>
           <div class="dash-launch-hint">Scores appear on every card instantly</div>
         </div>
-        <span class="dash-launch-arr">›</span>
+        <span class="dash-launch-arr"><svg viewBox="0 0 12 12" fill="none" width="11" height="11" aria-hidden="true"><path d="M4.5 2.5L8 6l-3.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
       </a>
       <a class="dash-launch-btn" href="https://www.indeed.com/jobs" target="_blank" rel="noopener">
         <div class="dash-launch-ico dash-launch-ico--in">in</div>
@@ -268,7 +333,7 @@ function renderDashboard(status) {
           <div class="dash-launch-name">Indeed Jobs</div>
           <div class="dash-launch-hint">Full AI analysis on every listing</div>
         </div>
-        <span class="dash-launch-arr">›</span>
+        <span class="dash-launch-arr"><svg viewBox="0 0 12 12" fill="none" width="11" height="11" aria-hidden="true"><path d="M4.5 2.5L8 6l-3.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
       </a>
     </div>`;
 
@@ -317,9 +382,11 @@ function renderDashboard(status) {
     // Update billing detail line under the toggle
     const detail = db.querySelector('#dashPlanDetail');
     if (detail) {
+      const yr = _getPricing().annual;
+      const mo = _getPricing().monthly;
       detail.innerHTML = plan === 'annual'
-        ? `<span class="dash-plan-billed">Billed ${PRICE.annual.display}/year · ${PRICE.annual.saving}</span>`
-        : `<span class="dash-plan-billed">${PRICE.monthly.detail}</span>`;
+        ? `<span class="dash-plan-billed">Billed ${yr.display}/year</span>`
+        : `<span class="dash-plan-billed">${mo.detail}</span>`;
     }
 
     // Update the CTA button text to reflect selected plan price
@@ -362,7 +429,8 @@ function renderDashboard(status) {
           dashTrialBtn.disabled = false; dashTrialBtn.textContent = 'Start trial'; return;
         }
         if (res.ok) {
-          showMsgEl(dashTrialMsg, '🎉 Trial activated! You now have 10 panels & analyses per day.', 'success');
+          const days = res.status?.trial_duration_days ?? 7;
+          showMsgEl(dashTrialMsg, `Trial activated — Pro features unlocked for ${days} days.`, 'success');
           _subStatus = res.status;
           setTimeout(() => { updateSubscriptionUI(res.status); renderDashboard(res.status); }, 1400);
         } else if (res.error === 'TRIAL_USED') {
@@ -405,7 +473,7 @@ function renderDashboard(status) {
         return;
       }
       if (res.ok) {
-        showMsgEl(restoreMsg, '✓ Subscription restored!', 'success');
+        showMsgEl(restoreMsg, 'Subscription restored!', 'success');
         _subStatus = res.status;
         updateSubscriptionUI(res.status);
         renderDashboard(res.status);
@@ -438,7 +506,7 @@ function _buildTierCard(tier, status, subsOn) {
     const isUrgent = days <= 2;
     const urgentSub = isUrgent ? `Last ${days === 1 ? 'day' : '2 days'} — upgrade to keep access` : `${days} days remaining`;
     return `
-      <div class="dash-tier-card dash-tier-card--trial">
+      <div class="dash-tier-card dash-tier-card--trial dash-tier-card--trial-info">
         <div class="dash-tier-left">
           <div class="dash-tier-dot dash-tier-dot--amber"></div>
           <div>
@@ -446,21 +514,30 @@ function _buildTierCard(tier, status, subsOn) {
             <div class="dash-tier-sub">${urgentSub}</div>
           </div>
         </div>
-        <button class="dash-upgrade-btn dash-upgrade-btn--amber" data-action="upgrade" type="button">Go Pro →</button>
       </div>`;
   }
 
-  // Free tier
+  // Free tier — informational only. The upgrade pathway lives in the bottom
+  // upgrade card (one upgrade surface per the dashboard demotion plan).
+  // Limits surface from status.limits (backend-driven via limits.ts);
+  // score count is intentionally absent (unlimited for all tiers).
+  const lim = status?.limits || {};
+  const subParts = [];
+  if (lim.panel   !== null && lim.panel   !== undefined) subParts.push(`${lim.panel} panels`);
+  if (lim.analyze !== null && lim.analyze !== undefined) subParts.push(`${lim.analyze} analyses`);
+  const subText = subParts.length
+    ? `${subParts.join(' · ')} per day`
+    : 'Score every job you see';   // fallback if limits missing
+
   return `
-    <div class="dash-tier-card">
+    <div class="dash-tier-card dash-tier-card--free-info">
       <div class="dash-tier-left">
         <div class="dash-tier-dot dash-tier-dot--green"></div>
         <div>
           <div class="dash-tier-name">Free plan</div>
-          <div class="dash-tier-sub">3 panels &nbsp;·&nbsp; 3 analyses &nbsp;·&nbsp; 30 scores/day</div>
+          <div class="dash-tier-sub">${subText}</div>
         </div>
       </div>
-      <button class="dash-upgrade-btn" data-action="upgrade" type="button">Upgrade →</button>
     </div>`;
 }
 
@@ -500,8 +577,10 @@ function _buildUsageCard(panelUsed, panelLim, anlUsed, anlLim) {
 
 // ── CTA text helper — always reflects the selected plan price ─────────────────
 // Used by _buildUpgradeCard (initial render) and the toggle handler (on switch).
+// Pricing comes from _subStatus.pricing on every call, so a status refresh
+// after a price change is reflected immediately on the next render.
 function _upgradeCTAText(plan, context) {
-  const p = PRICE[plan];
+  const p = _getPricing()[plan];
   const price = plan === 'annual'
     ? `${p.display}/year`
     : `${p.display}${p.period}`;
@@ -514,8 +593,9 @@ function _upgradeCTAText(plan, context) {
 // Renders the monthly/annual toggle used in upgrade cards.
 // selected = 'monthly' | 'annual'
 function _buildPlanToggle(selected) {
-  const mo = PRICE.monthly;
-  const yr = PRICE.annual;
+  const pr = _getPricing();
+  const mo = pr.monthly;
+  const yr = pr.annual;
   return `
     <div class="dash-plan-toggle" id="dashPlanToggle">
       <button class="dash-plan-btn ${selected === 'monthly' ? 'dash-plan-btn--active' : ''}"
@@ -527,12 +607,12 @@ function _buildPlanToggle(selected) {
               data-plan="annual" type="button">
         <span class="dash-plan-label">${yr.label}</span>
         <span class="dash-plan-price">${yr.perMonth}<span class="dash-plan-period">/mo</span></span>
-        <span class="dash-plan-badge">2 months free</span>
+        <span class="dash-plan-badge">${yr.saving}</span>
       </button>
     </div>
     <div class="dash-plan-detail" id="dashPlanDetail">
       ${selected === 'annual'
-        ? `<span class="dash-plan-billed">Billed ${yr.display}/year · ${yr.saving}</span>`
+        ? `<span class="dash-plan-billed">Billed ${yr.display}/year</span>`
         : `<span class="dash-plan-billed">${mo.detail}</span>`}
     </div>`;
 }
@@ -549,13 +629,15 @@ function _buildUpgradeCard(tier, status) {
     'Cancel anytime',
   ];
   const featHTML = feats.map(f =>
-    `<div class="dash-upgrade-feat"><div class="dash-upgrade-check">✓</div>${f}</div>`
+    `<div class="dash-upgrade-feat"><div class="dash-upgrade-check">${_CHECK_SVG}</div>${f}</div>`
   ).join('');
 
   // ── Trial tier — keep your access ────────────────────────────────────────
   if (isTrial) {
+    // SVG warning triangle — replaces ⚠ Unicode glyph for cross-platform consistency.
+    const warnSvg = '<svg viewBox="0 0 12 12" fill="none" width="11" height="11" aria-hidden="true" style="vertical-align:-2px;margin-right:3px"><path d="M6 1.5L11 10H1L6 1.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M6 5v2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="6" cy="9" r=".7" fill="currentColor"/></svg>';
     const urgency = days <= 2
-      ? `<span class="dash-trial-urgency">⚠ ${days === 1 ? 'Last day' : '2 days left'} — don't lose access</span>`
+      ? `<span class="dash-trial-urgency">${warnSvg}${days === 1 ? 'Last day' : '2 days left'} — don't lose access</span>`
       : '';
     return `
       <div class="dash-upgrade-card">
@@ -574,10 +656,16 @@ function _buildUpgradeCard(tier, status) {
 
   // ── Free tier — trial not yet used: trial as primary, paid as secondary ──
   if (!trialUsed) {
+    // Trial duration comes from /status (status.trial_duration_days, which
+    // mirrors TRIAL_DAYS in the backend). We don't quote per-day limits in
+    // this card because the message is "unlimited everything during trial" —
+    // the actual trial caps (10 panels/day, etc.) appear in the limit panel
+    // if a trial user ever hits them, not here in the upsell.
+    const trialDur = status?.trial_duration_days ?? status?.tiers?.trial?.duration_days ?? 7;
     return `
       <div class="dash-upgrade-card">
         <div class="dash-upgrade-name-row">
-          <div class="dash-upgrade-name">Try Pro free for 7 days</div>
+          <div class="dash-upgrade-name">Try Pro free for ${trialDur} days</div>
         </div>
         <div class="dash-upgrade-desc">Unlimited panels, analyses &amp; AI coaching</div>
         <div class="dash-trial-email-form">
@@ -589,9 +677,9 @@ function _buildUpgradeCard(tier, status) {
           <div id="dashTrialMsg" class="msg msg--hidden" role="alert"></div>
         </div>
         <div class="dash-upgrade-feats">
-          <div class="dash-upgrade-feat"><div class="dash-upgrade-check">✓</div>10 panels &amp; AI analyses per day</div>
-          <div class="dash-upgrade-feat"><div class="dash-upgrade-check">✓</div>Full coaching: strengths, gaps &amp; game plan</div>
-          <div class="dash-upgrade-feat"><div class="dash-upgrade-check">✓</div>No credit card needed · 7 days free</div>
+          <div class="dash-upgrade-feat"><div class="dash-upgrade-check">${_CHECK_SVG}</div>Unlimited panels &amp; AI analyses</div>
+          <div class="dash-upgrade-feat"><div class="dash-upgrade-check">${_CHECK_SVG}</div>Full coaching: strengths, gaps &amp; game plan</div>
+          <div class="dash-upgrade-feat"><div class="dash-upgrade-check">${_CHECK_SVG}</div>No credit card needed · ${trialDur} days free</div>
         </div>
         <div class="dash-or-row"><span>ready to subscribe?</span></div>
         ${_buildPlanToggle(_selectedPlan)}
@@ -645,9 +733,13 @@ chrome.runtime.onMessage.addListener((msg) => {
 function showProToast() {
   const toast = document.getElementById('saveToast');
   if (!toast) return;
-  toast.textContent = '🎉 You\'re now on Pro — enjoy unlimited access';
+  toast.textContent = "You're now on Pro — enjoy unlimited access";
+  toast.classList.add('save-toast--success');
   toast.classList.remove('save-toast--hidden');
-  setTimeout(() => toast.classList.add('save-toast--hidden'), 5000);
+  setTimeout(() => {
+    toast.classList.add('save-toast--hidden');
+    toast.classList.remove('save-toast--success');
+  }, 5000);
 }
 
 // ── Header / subscription UI ───────────────────────────────────────────────────
@@ -675,7 +767,7 @@ function updateSubscriptionUI(status) {
     proBadge.innerHTML   = 'Pro';
     proBadge.className   = 'pro-badge';
     proBadge.style.display = 'inline-flex';
-    if (headerAction) headerAction.innerHTML = '<span class="header-pro-badge">Pro ✓</span>';
+    if (headerAction) headerAction.innerHTML = '<span class="header-pro-badge">Pro <svg viewBox="0 0 12 12" fill="none" width="9" height="9" aria-hidden="true" style="vertical-align:-1px"><path d="M2.5 6l2.5 2.5L9.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>';
     return;
   }
 
@@ -693,23 +785,18 @@ function updateSubscriptionUI(status) {
       proBadge.innerHTML = `${ring}<span class="badge-text">Trial · <strong>${days}d</strong> left</span>`;
     }
     proBadge.style.display = 'inline-flex';
-    const isUrgent = days <= 1;
-    const isWarn   = days <= 3;
-    const cls   = isUrgent ? 'header-upgrade-btn--urgent' : isWarn ? 'header-upgrade-btn--warn' : '';
-    const label = isUrgent ? 'Last day · Upgrade →' : `${days}d left · Upgrade →`;
-    if (headerAction) {
-      headerAction.innerHTML = `<button id="headerUpgradeBtn" class="header-upgrade-btn ${cls}" type="button">${label}</button>`;
-      bindUpgradeBtn();
-    }
+    // Header upgrade button removed — the deadline pill carries the urgency,
+    // the bottom upgrade card is the conversion surface. One upgrade surface.
+    if (headerAction) headerAction.innerHTML = '';
     return;
   }
 
-  // Free tier
+  // Free tier — header stays clean. Upgrade pathway lives in the bottom
+  // upgrade card. Removing the header button is part of the dashboard
+  // demotion plan: one upgrade surface, not four. Trial tier still gets a
+  // header button because trial users have a deadline (see branch above).
   proBadge.style.display = 'none';
-  if (headerAction) {
-    headerAction.innerHTML = '<button id="headerUpgradeBtn" class="header-upgrade-btn" type="button">Upgrade →</button>';
-    bindUpgradeBtn();
-  }
+  if (headerAction) headerAction.innerHTML = '';
 }
 
 // ── Accordion ─────────────────────────────────────────────────────────────────
@@ -827,7 +914,7 @@ function setAutoSaveStatus(state) {
   if (state === 'pending') {
     el.textContent = 'Saving…'; el.className = 'autosave-status autosave-status--pending';
   } else if (state === 'saved') {
-    el.textContent = 'Saved ✓'; el.className = 'autosave-status autosave-status--saved';
+    el.textContent = 'Saved'; el.className = 'autosave-status autosave-status--saved';
     clearTimeout(el._fadeTimer);
     el._fadeTimer = setTimeout(() => { el.textContent = ''; el.className = 'autosave-status'; }, 2200);
   } else {
@@ -868,7 +955,7 @@ async function save(silent = false) {
       }
     }
   } catch {
-    showMsg('afMsg', '⚠ Save failed', 'error');
+    showMsg('afMsg', 'Save failed', 'error');
     return;
   }
 
@@ -909,13 +996,13 @@ async function runAutofill() {
     const res = await chrome.runtime.sendMessage({ type:'JS_PARSE_PROFILE', text });
     if (!res?.ok) throw new Error(res?.error || 'failed');
     applyParsed(res.result);
-    label.textContent = '✓ Profile updated';
-    showMsg('afMsg', '✓ Profile extracted from your description', 'success');
+    label.textContent = 'Profile updated';
+    showMsg('afMsg', 'Profile extracted from your description', 'success');
     setTimeout(() => { label.textContent = 'Auto-fill from description'; btn.disabled = false; }, 3500);
   } catch {
     label.textContent = 'Auto-fill from description';
     btn.disabled = false;
-    showMsg('afMsg', '⚠ Could not extract — try again or fill manually', 'error');
+    showMsg('afMsg', 'Could not extract — try again or fill manually', 'error');
   }
 }
 
@@ -958,7 +1045,7 @@ function updateFooter() {
   const lbl  = document.getElementById('progressLbl');
   if (fill) fill.style.width = pct + '%';
   if (lbl) {
-    lbl.textContent = pct === 100 ? 'Profile complete ✓' : `${pct}% complete`;
+    lbl.textContent = pct === 100 ? 'Profile complete' : `${pct}% complete`;
     lbl.className   = pct === 100 ? 'progress-lbl progress-lbl--done' : 'progress-lbl';
   }
 }
@@ -1128,11 +1215,46 @@ async function renderTracker() {
   filtered.forEach(entry => list.appendChild(buildTrackerCard(entry)));
 }
 
+// Tracker status icons. Inline SVG (not emoji) for consistent rendering
+// across Mac, Windows, Linux, and ChromeOS. All icons share the same stroke
+// width and cap style for a unified visual language. 12×12 viewBox, scaled
+// by font-size at usage site.
+const TK_ICONS = {
+  saved: `<svg viewBox="0 0 12 12" fill="none" width="11" height="11" aria-hidden="true">
+    <path d="M3 1.5h6v5L6 8.5 3 6.5v-5z" stroke="currentColor" stroke-width="1.2"
+          stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M6 8.5v2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+  </svg>`,
+  applied: `<svg viewBox="0 0 12 12" fill="none" width="11" height="11" aria-hidden="true">
+    <path d="M10.5 1.5L1.5 5l4 1.5 1.5 4 3.5-9z" stroke="currentColor" stroke-width="1.2"
+          stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`,
+  interview: `<svg viewBox="0 0 12 12" fill="none" width="11" height="11" aria-hidden="true">
+    <circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.2"/>
+    <circle cx="6" cy="6" r="2"   stroke="currentColor" stroke-width="1.2"/>
+    <circle cx="6" cy="6" r=".6" fill="currentColor"/>
+  </svg>`,
+  rejected: `<svg viewBox="0 0 12 12" fill="none" width="11" height="11" aria-hidden="true">
+    <path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.4"
+          stroke-linecap="round"/>
+  </svg>`,
+  chevron: `<svg viewBox="0 0 10 10" fill="none" width="9" height="9" aria-hidden="true">
+    <path d="M2.5 4l2.5 2.5L7.5 4" stroke="currentColor" stroke-width="1.4"
+          stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`,
+  external: `<svg viewBox="0 0 12 12" fill="none" width="11" height="11" aria-hidden="true">
+    <path d="M5 2H3a1 1 0 00-1 1v6a1 1 0 001 1h6a1 1 0 001-1V7" stroke="currentColor"
+          stroke-width="1.2" stroke-linecap="round"/>
+    <path d="M7 2h3v3M10 2L5.5 6.5" stroke="currentColor" stroke-width="1.2"
+          stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`,
+};
+
 const STATUS_META = {
-  saved:     { label:'Saved',     icon:'📌', cls:'tk-status--saved'     },
-  applied:   { label:'Applied',   icon:'📤', cls:'tk-status--applied'   },
-  interview: { label:'Interview', icon:'🎯', cls:'tk-status--interview' },
-  rejected:  { label:'Rejected',  icon:'✕',  cls:'tk-status--rejected'  },
+  saved:     { label:'Saved',     icon: TK_ICONS.saved,     cls:'tk-status--saved'     },
+  applied:   { label:'Applied',   icon: TK_ICONS.applied,   cls:'tk-status--applied'   },
+  interview: { label:'Interview', icon: TK_ICONS.interview, cls:'tk-status--interview' },
+  rejected:  { label:'Rejected',  icon: TK_ICONS.rejected,  cls:'tk-status--rejected'  },
 };
 
 function buildTrackerCard(entry) {
@@ -1155,7 +1277,7 @@ function buildTrackerCard(entry) {
         <div class="tk-card-meta">${platform} ${_esc(entry.company)}${entry.location ? ' · '+_esc(entry.location) : ''} <span class="tk-card-time">· ${_timeAgo(entry.savedAt)}</span></div>
       </div>
       <div class="tk-card-actions">
-        ${entry.url ? `<a class="tk-icon-btn" href="${entry.url}" target="_blank" rel="noopener" title="Open posting">↗</a>` : ''}
+        ${entry.url ? `<a class="tk-icon-btn" href="${entry.url}" target="_blank" rel="noopener" title="Open posting">${TK_ICONS.external}</a>` : ''}
         <button class="tk-icon-btn tk-delete-btn" title="Remove" type="button">
           <svg viewBox="0 0 16 16" fill="none" width="13" height="13">
             <path d="M3 4h10M6 4V2h4v2M5 4v9a1 1 0 001 1h4a1 1 0 001-1V4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
@@ -1165,7 +1287,7 @@ function buildTrackerCard(entry) {
     </div>
     <div class="tk-card-bottom">
       <div class="tk-status-wrap">
-        <button class="tk-status-pill ${meta.cls}" type="button">${meta.icon} ${meta.label} <span class="tk-chevron">▾</span></button>
+        <button class="tk-status-pill ${meta.cls}" type="button"><span class="tk-status-icon">${meta.icon}</span> ${meta.label} <span class="tk-chevron">${TK_ICONS.chevron}</span></button>
       </div>
     </div>`;
   card.querySelector('.tk-status-pill').addEventListener('click', e => {
@@ -1204,9 +1326,18 @@ function showDeleteConfirm(card, jobId) {
 }
 
 function _emptyStateHTML(noJobsAtAll) {
+  // SVG clipboard icon — replaces 📋 emoji for cross-platform consistency
+  const clipboardIcon = `
+    <svg viewBox="0 0 36 36" fill="none" width="36" height="36" aria-hidden="true">
+      <rect x="9" y="6" width="18" height="24" rx="2" stroke="currentColor" stroke-width="1.5"/>
+      <rect x="13" y="3" width="10" height="5" rx="1" stroke="currentColor" stroke-width="1.5"
+            fill="currentColor" fill-opacity=".08"/>
+      <path d="M13 14h10M13 19h10M13 24h6" stroke="currentColor" stroke-width="1.4"
+            stroke-linecap="round" opacity=".55"/>
+    </svg>`;
   return `
     <div class="tk-empty">
-      <div class="tk-empty-icon">📋</div>
+      <div class="tk-empty-icon">${clipboardIcon}</div>
       <div class="tk-empty-title">${noJobsAtAll ? 'No jobs tracked yet' : 'No jobs in this stage'}</div>
       <div class="tk-empty-sub">${noJobsAtAll ? 'Score jobs on LinkedIn or Indeed, then click <strong>Save</strong> in the analysis panel.' : 'Change the filter above to see jobs in other stages.'}</div>
       ${noJobsAtAll ? '<a class="tk-empty-cta" href="https://www.linkedin.com/jobs/" target="_blank" rel="noopener">Go to LinkedIn Jobs →</a>' : ''}
