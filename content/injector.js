@@ -435,14 +435,52 @@
     scoreEl.textContent = scoreText;
     badge.append(dot, scoreEl);
 
+    // Indeed: clicking the badge triggers the card's own click flow, which
+    // makes Indeed load the right pane with this job's details. Our right-pane
+    // MutationObserver then detects the title change and refreshes the banner.
+    // We do NOT open a left-side panel on Indeed — the right pane is the
+    // canonical place for full analysis (single-surface UX, matches Indeed's
+    // native behaviour). The "View full analysis →" button in the banner is
+    // how users open the analysis panel.
+    function _triggerIndeedCardLoad(card, badge) {
+      // Brief visual feedback — the badge dims slightly so the user knows
+      // their click registered, even if the right-pane load takes a moment.
+      badge.classList.add('js-badge--just-clicked');
+      setTimeout(() => badge.classList.remove('js-badge--just-clicked'), 320);
+
+      // Find the card's clickable title link. Indeed wires its own click
+      // handler to this and uses it to load the right pane via AJAX.
+      const titleLink = card.querySelector('h2.jobTitle a.jcs-JobTitle, a.jcs-JobTitle, h2 a[data-jk]');
+      if (!titleLink) return;
+
+      // Some Indeed pages prefer a click on the result container itself
+      // (which has a wider hit area and matching JCS_onClk handler). The
+      // title link works on every page type we've tested.
+      titleLink.click();
+
+      // If the right pane is below the fold, scroll the page so the user
+      // sees the banner update. Indeed's right pane is sticky-positioned,
+      // so a small scroll is usually all that's needed to bring it on-screen.
+      const rightPane = document.querySelector('section#job-full-details');
+      if (rightPane) {
+        const rect = rightPane.getBoundingClientRect();
+        if (rect.top > window.innerHeight - 100 || rect.bottom < 100) {
+          rightPane.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }
+    }
+
     badge.addEventListener('click', e => {
-      e.preventDefault(); e.stopPropagation();
-      window.togglePanel(badge, card, result, jobData);
+      e.preventDefault();
+      // Don't stopPropagation — but the click already has its own handler
+      // via _triggerIndeedCardLoad, and Indeed's JCS_onClk is delegated on
+      // the parent so it'll see this click as a normal card click anyway.
+      _triggerIndeedCardLoad(card, badge);
     });
     badge.addEventListener('keydown', e => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
-        window.togglePanel(badge, card, result, jobData);
+        _triggerIndeedCardLoad(card, badge);
       }
     });
 
@@ -482,18 +520,15 @@
 
     const brand = document.createElement('div');
     brand.className = 'js-fb-brand';
+    // Compact mark — small ring icon + name. Replaces the previous heavy
+    // dark-gradient block that was visually overpowering the filter buttons.
+    // Same icon language as the detail banner so the brand stays recognisable
+    // across surfaces but doesn't overweight the filter bar.
     brand.innerHTML = `
-      <div style="
-        width:24px;height:24px;border-radius:6px;
-        background:linear-gradient(135deg,#163526,#1F4A35);
-        display:flex;align-items:center;justify-content:center;flex-shrink:0;
-        box-shadow:0 1px 4px rgba(5,50,20,0.3);
-      ">
-        <svg viewBox="0 0 16 18" fill="none" width="11" height="13">
-          <circle cx="8" cy="9" r="6" fill="none" stroke="#6EE7B7" stroke-width="1.3"/>
-          <circle cx="9.5" cy="7.5" r="2.2" fill="#059669"/>
-        </svg>
-      </div>
+      <svg viewBox="0 0 18 18" fill="none" width="16" height="16" aria-hidden="true">
+        <circle cx="9" cy="9" r="6.5" fill="none" stroke="#059669" stroke-width="1.5"/>
+        <circle cx="10.5" cy="7.5" r="2.4" fill="#059669"/>
+      </svg>
       <span>Rolevance</span>`;
 
     const divider = document.createElement('div');
@@ -640,13 +675,17 @@
       hasScore ? `Rolevance: ${result.score}% match — ${result.text || ''}` : 'Rolevance: Complete your profile to score this job'
     );
 
+    // Premium polish: dropped "Based on full description" italic chrome
+    // (redundant — entire banner is implicitly based on full desc).
+    // Save button now clearly subordinate (outline + bookmark icon).
+    // "View full analysis" is the primary action with stronger visual weight.
     banner.innerHTML = `
       <div class="js-db-inner">
         <div class="js-db-left">
           <div class="js-db-brand">
-            <svg viewBox="0 0 16 18" fill="none" width="11" height="13" aria-hidden="true">
-              <circle cx="8" cy="9" r="6" fill="none" stroke="#059669" stroke-width="1.3"/>
-              <circle cx="9.5" cy="7.5" r="2.2" fill="#059669"/>
+            <svg viewBox="0 0 18 18" fill="none" width="14" height="14" aria-hidden="true">
+              <circle cx="9" cy="9" r="6.5" fill="none" stroke="#059669" stroke-width="1.5"/>
+              <circle cx="10.5" cy="7.5" r="2.4" fill="#059669"/>
             </svg>
             <span class="js-db-brand-name">Rolevance</span>
           </div>
@@ -656,11 +695,18 @@
             <span class="js-db-match-text">${_escBanner(result.text || '')}</span>
           </div>
           ${result.verdict ? `<span class="js-db-verdict">${_escBanner(result.verdict)}</span>` : ''}
-          <span class="js-db-basis">Based on full description</span>
         </div>
-        <button class="js-db-save-btn" type="button">Save</button>
+        <button class="js-db-save-btn" type="button" aria-label="Save job">
+          <svg viewBox="0 0 14 16" fill="none" width="13" height="14" aria-hidden="true">
+            <path d="M2.5 1.5h9v13l-4.5-2.5L2.5 14.5v-13z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+          </svg>
+          <span class="js-db-save-label">Save</span>
+        </button>
         <button class="js-db-analysis-btn" type="button">
-          View full analysis →
+          View full analysis
+          <svg viewBox="0 0 14 14" fill="none" width="11" height="11" aria-hidden="true" style="margin-left:5px">
+            <path d="M3 7h8M7.5 3l3.5 4-3.5 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
         </button>
       </div>`;
 
@@ -707,7 +753,9 @@
   }
 
   function _markBannerSaved(btn) {
-    btn.textContent = '✓ Saved';
+    const label = btn.querySelector('.js-db-save-label');
+    if (label) label.textContent = 'Saved';
+    else btn.textContent = 'Saved';
     btn.classList.add('js-db-save-btn--saved');
     btn.disabled = false;
   }
